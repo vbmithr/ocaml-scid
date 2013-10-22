@@ -12,3 +12,9 @@ Library scid
   Modules: Scid
   BuildDepends: cstruct, cstruct.syntax
   CompiledObject: best
+
+Executable copy
+  Path: test
+  MainIs: copy.ml
+  BuildDepends: scid
+  CompiledObject: best
