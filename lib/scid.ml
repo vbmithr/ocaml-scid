@@ -157,7 +157,7 @@ let input_records f ic =
       recs := (f record)::!recs
     done; []
   with End_of_file ->
-    List.rev !recs
+    !recs
 
 let input_sc_records = input_records sc_record_of_cstruct
 let input_sc_tick_records = input_records sc_tick_record_of_cstruct
