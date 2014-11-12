@@ -1,5 +1,3 @@
-# OASIS_START
-# DO NOT EDIT (digest: da0f230a07bb2507dce4cf52206327b2)
 version = "0.1"
 description = "Sierra Chart SCID files parser for OCaml"
 requires = "cstruct cstruct.syntax"
@@ -8,5 +6,3 @@ archive(byte, plugin) = "scid.cma"
 archive(native) = "scid.cmxa"
 archive(native, plugin) = "scid.cmxs"
 exists_if = "scid.cma"
-# OASIS_STOP
-

@@ -1,0 +1,6 @@
+PRJ scid
+S lib
+S lib/test
+B _build/lib
+B _build/lib_test
+PKG cstruct
