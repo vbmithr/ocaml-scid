@@ -2,5 +2,6 @@ true: debug, bin_annot
 <lib>: include
 <lib_test>: include
 
-<lib/*.*>: syntax(camlp4o), package(cstruct.syntax), package(cstruct)
-<lib_test/*.*>: syntax(camlp4o), package(cstruct.syntax), package(cstruct)
+<lib/types.*>: syntax(camlp4o), package(cstruct.syntax)
+<lib/scid.*>: package(cstruct)
+<lib_test/*.*>: package(cstruct)
