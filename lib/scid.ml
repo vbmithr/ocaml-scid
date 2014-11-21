@@ -133,6 +133,39 @@ module IDR = struct
 
   let of_channel = input_records of_cstruct
   let to_channel = output_records to_cstruct
+
+
+  module Nb = struct
+    type src = [ `Channel of in_channel | `String of string | `Manual ]
+    type decoder = {
+      src: src;
+      mutable buf: bytes;
+      mutable i_pos: int;
+      mutable i_max: int;
+      mutable loc: [`BH of int | `AH of int];
+      mutable k:
+        decoder -> [ `R of t | `Await | `End | `Error ];
+    }
+
+    let eoi d = d.buf <- ""; d.i_pos <- max_int; d.i_max <- 0
+
+    let decoder src = ()
+
+    let r_block
+    let decoder src =
+      let io_buffer_size = 4096 in
+      let i, i_pos, i_max = match src with
+        | `Manual -> "", max_int, 0
+        | `String s -> s, 0, String.length s - 1
+        | `Channel _ -> String.create io_buffer_size, max_int, 0
+      in
+      { src = (src :> src); i; i_pos; i_max; k = r_lexeme ret }
+
+    let decode d = d.k d
+  end
+
+  module Manual = struct
+  end
 end
 
 module Tick = struct

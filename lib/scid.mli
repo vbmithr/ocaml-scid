@@ -10,6 +10,7 @@ module IDR : sig
     bid_volume : int;
     ask_volume : int;
   }
+  (** SierraChart's s_IntradayRecord *)
 
   val of_cstruct : Cstruct.t -> t
   val to_cstruct : buf:Cstruct.t -> t -> unit
@@ -25,6 +26,7 @@ module Tick : sig
     amount : int;
     direction : [ `Ask | `Bid ];
   }
+  (** Custom type representing just one tick. (Not in SierraChart.) *)
 
   val of_cstruct : Cstruct.t -> t
   val to_cstruct : buf:Cstruct.t -> t -> unit
