@@ -12,8 +12,9 @@ let () =
     | `End -> assert false
     | `Error `Invalid_header bs ->
       Printf.eprintf "Invalid header. aborting.\n"; exit 1
-    | `Error `Bytes_unparsed nb ->
-      Printf.eprintf "Error while parsing: %d bytes not parsed.\n" nb; exit 1
+    | `Error `Bytes_unparsed bs ->
+      Printf.eprintf "Error while parsing: %d bytes not parsed.\n"
+        (Bigstring.length bs); exit 1
     | `Await ->
       let rec refill () =
         try Bigstring.input ic buf

@@ -1,3 +1,5 @@
+open Core.Std
+
 let () =
   let ic = open_in_bin Sys.argv.(1) in
   let d = Scid.Nb.decoder @@ `Channel ic in
@@ -6,11 +8,12 @@ let () =
     | `R r -> read_forever @@ r::acc
     | `End -> acc
     | `Error `Invalid_header bs ->
-      Cstruct.(of_bigarray Scid.valid_header |> hexdump);
       Cstruct.(of_bigarray bs |> hexdump);
       Printf.eprintf "Invalid header. aborting.\n"; exit 1
-    | `Error `Bytes_unparsed nb ->
-      Printf.eprintf "Error while parsing: %d bytes not parsed.\n" nb;
+    | `Error `Bytes_unparsed bs ->
+      Cstruct.(of_bigarray bs |> hexdump);
+      Printf.eprintf "Error while parsing: %d bytes not parsed.\n"
+        (Bigstring.length bs);
       acc
     | _ -> assert false
   in

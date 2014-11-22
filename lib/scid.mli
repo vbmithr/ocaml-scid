@@ -1,8 +1,5 @@
 open Core.Std
 
-val valid_header : Bigstring.t
-(** [valid_header] is the correct scid header. *)
-
 type t = {
   datetime : float;
   o : float;
@@ -32,22 +29,22 @@ module B : sig
 
   val decode : decoder ->
     [ `R of t | `End
-    | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of int ] ]
+    | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
   (** [decode d] is :
       {ul
       {- [`R r], if a record [r] was decoded.}
       {- [`End], if the end of input was reached.}
-      {- [`Error], if an error occured. If you are interested in
+      {- [`Error reason], if an error occured. If you are interested in
          a best-effort decoding you can still continue to decode
          after an error.}}
 
       {b Note.} Repeated invocation always eventually returns [`End], even in
       case of errors. *)
 
-  (* (\** {1 Encoding} *\) *)
+  (** {1 Encoding} *)
 
-  (* type dst = [ `Channel of out_channel | `Buffer of Buffer.t ] *)
-  (* (\** The type for output destinations. *\) *)
+  type dst = [ `Channel of out_channel | `Bigbuffer of Bigbuffer.t ]
+  (** The type for output destinations. *)
 
   (* type encoder *)
   (* (\** The type for R encoders. *\) *)
@@ -78,7 +75,7 @@ module Nb : sig
 
   val decode : decoder ->
     [ `R of t | `Await | `End
-    | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of int ] ]
+    | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
   (** [decode d] is:
       {ul
       {- [`Await] iff [d] has a [`Manual] input source and awaits

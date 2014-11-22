@@ -95,7 +95,11 @@ module B = struct
         with Bigstring.IOError (rc, End_of_file) -> rc in
       if rc = 0 then (eoi d) else (d.i_pos <- 0; d.i_max <- rc - 1;)
 
-  let r_end d = if d.b_pos = 0 then `End else `Error (`Bytes_unparsed d.b_pos)
+  let r_end d = if d.b_pos = 0 then `End
+    else
+      let len = d.b_pos in
+      d.b_pos <- 0;
+      `Error (`Bytes_unparsed (Bigstring.sub d.b ~pos:0 ~len))
 
   let rec r_record d =
     if d.i_pos > d.i_max
@@ -121,9 +125,10 @@ module B = struct
       Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
       d.i_pos <- d.i_pos + len;
       if d.b_pos + len = header_len then
-        (if d.b = valid_header
-         then (d.b_pos <- 0; d.header_read <- true; r_record d)
-         else `Error (`Invalid_header d.b))
+        begin
+          d.b_pos <- 0; d.header_read <- true;
+          if d.b = valid_header then r_record d else `Error (`Invalid_header d.b)
+        end
       else (d.b_pos <- d.b_pos + len; r_header d)
     end
 
@@ -139,6 +144,10 @@ module B = struct
       i; i_pos; i_max; }
 
   let decode d = if d.header_read then r_record d else r_header d
+
+  (* Encoding *)
+
+  type dst = [ `Channel of out_channel | `Bigbuffer of Bigbuffer.t ]
 end
 
 module Nb = struct
@@ -153,7 +162,7 @@ module Nb = struct
     mutable i_max: int;
     mutable k: decoder ->
       [ `R of t | `Await | `End
-      | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of int ] ];
+      | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ];
   }
 
   let eoi d =
@@ -179,7 +188,10 @@ module Nb = struct
 
   let r_end k d =
     if d.b_pos = 0 then k d `End
-    else k d @@ `Error (`Bytes_unparsed d.b_pos)
+    else
+      let len = d.b_pos in
+      d.b_pos <- 0;
+      k d @@ `Error (`Bytes_unparsed (Bigstring.sub d.b ~pos:0 ~len))
 
   let rec r_record k d =
     if d.i_pos > d.i_max then
@@ -205,9 +217,10 @@ module Nb = struct
       Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
       d.i_pos <- d.i_pos + len;
       if d.b_pos + len = header_len then
-        (if d.b = valid_header
-         then (d.b_pos <- 0; d.header_read <- true; r_record k d)
-         else `Error (`Invalid_header d.b))
+        begin
+          d.b_pos <- 0; d.header_read <- true;
+          if d.b = valid_header then r_record k d else `Error (`Invalid_header d.b)
+        end
       else (d.b_pos <- d.b_pos + len; r_header k d)
     end
 
