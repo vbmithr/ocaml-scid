@@ -159,10 +159,11 @@ module Nb = struct
     d.i_pos <- Int.max_value;
     d.i_max <- 0
 
-  let decode_src d s j l =
-    if (j < 0 || l < 0 || j + l > Bigstring.length s) then invalid_arg "bounds";
+  let decode_src d s =
+    let j = Bigsubstring.pos s in
+    let l = Bigsubstring.length s in
     if (l = 0) then eoi d else
-      (d.i <- s; d.i_pos <- j; d.i_max <- j + l - 1;)
+      (d.i <- Bigsubstring.to_bigstring s; d.i_pos <- j; d.i_max <- j + l - 1;)
 
   let refill k d = match d.src with
     | `Manual -> d.k <- k; `Await
@@ -172,7 +173,7 @@ module Nb = struct
         try Bigstring.input ic d.i ~pos:0
         with Bigstring.IOError (rc, End_of_file) -> rc
       in
-      decode_src d d.i 0 rc;
+      decode_src d @@ Bigsubstring.create d.i ~pos:0 ~len:rc;
       k d
 
   let r_end k d =
@@ -231,8 +232,33 @@ module Nb = struct
 
   let decode d = d.k d
 
+  (* Encode *)
+
+  type dst = [ `Channel of out_channel | `Bigbuffer of Bigbuffer.t | `Manual ]
+  type encode = [ `Await | `End | `R of t]
+  type encoder =
+    { dst: dst;
+      mutable o : string;
+      mutable o_pos : int;
+      mutable o_max : int;
+      mutable k :
+        encoder -> encode -> [ `Partial | `Ok ] }
+
+  let encode_dst e s j l =
+    if (j < 0 || l < 0 || j + l > String.length s) then invalid_arg "bounds";
+    e.o <- s; e.o_pos <- j; e.o_max <- j + l - 1
+
+  let partial k e = function `Await -> k e
+  | `R _ | `End -> invalid_arg "cannot encode now, use `Await first"
+
+  let flush k e = match e.dst with
+  | `Manual -> e.k <- partial k; `Partial
+  | `Bigbuffer b -> Bigbuffer.add_substring b e.o 0 e.o_pos; e.o_pos <- 0; k e
+  | `Channel oc -> output oc e.o 0 e.o_pos; e.o_pos <- 0; k e
+
   module Manual = struct
     let src = decode_src
+    let dst = encode_dst
   end
 end
 

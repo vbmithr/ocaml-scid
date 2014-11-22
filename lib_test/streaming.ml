@@ -25,6 +25,6 @@ let () =
         | Bigstring.IOError (rc, End_of_file) -> rc
       in
       let rc = refill () in
-      Scid.Nb.Manual.src d buf 0 rc;
+      Scid.Nb.Manual.src d @@ Bigsubstring.create buf ~pos:0 ~len:rc;
       read_forever acc
   in never_returns @@ read_forever []

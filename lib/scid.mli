@@ -91,13 +91,13 @@ module Nb : sig
       {b Note.} Repeated invocation always eventually returns [`End], even in
       case of errors. *)
 
-  (* (\** {1 Encoding} *\) *)
+  (** {1 Encoding} *)
 
-  (* type dst = [ `Channel of out_channel | `Buffer of Buffer.t | `Manual ] *)
-  (* (\** The type for output destinations. *\) *)
+  type dst = [ `Channel of out_channel | `Bigbuffer of Bigbuffer.t | `Manual ]
+  (** The type for output destinations. *)
 
-  (* type encoder *)
-  (* (\** The type for R encoders. *\) *)
+  type encoder
+  (** The type for R encoders. *)
 
   (* val encoder : [< dst] -> encoder *)
   (* (\** [encoder dst] is an encoder that outputs to [dst]. *\) *)
@@ -126,7 +126,7 @@ module Nb : sig
   (** Manual sources and destinations. *)
   module Manual : sig
 
-    val src : decoder -> Bigstring.t -> int -> int -> unit
+    val src : decoder -> Bigsubstring.t -> unit
     (** [src d s k l] provides [d] with [l] bytes to read,
         starting at [k] in [s]. This byte range is read by calls to {!decode}
         with [d] until [`Await] is returned. To signal the end of input
