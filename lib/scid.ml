@@ -147,11 +147,13 @@ module Nb = struct
     src: src;
     b: Bigstring.t;
     mutable b_pos: int;
-    mutable after_header: bool;
+    mutable header_read: bool;
     mutable i: Bigstring.t;
     mutable i_pos: int;
     mutable i_max: int;
-    mutable k: decoder -> [ `R of t | `Await | `End | `Error ];
+    mutable k: decoder ->
+      [ `R of t | `Await | `End
+      | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of int ] ];
   }
 
   let eoi d =
@@ -175,8 +177,9 @@ module Nb = struct
       decode_src d d.i 0 rc;
       k d
 
-  let error k d = k d `Error
-  let r_end k d = if d.b_pos <> 0 then k d `End else k d `Error
+  let r_end k d =
+    if d.b_pos = 0 then k d `End
+    else k d @@ `Error (`Bytes_unparsed d.b_pos)
 
   let rec r_record k d =
     if d.i_pos > d.i_max then
@@ -199,13 +202,15 @@ module Nb = struct
       let len = min can_read want_read in
       Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
       d.i_pos <- d.i_pos + len;
-      (* TODO: check header *)
-      d.after_header <- true;
-      r_record k d
+      if d.b_pos + len = header_len then
+        (if d.b = valid_header
+         then (d.b_pos <- 0; d.header_read <- true; r_record k d)
+         else `Error (`Invalid_header d.b))
+      else (d.b_pos <- d.b_pos + len; r_header k d)
     end
 
   let rec ret d result =
-    d.k <- (if d.after_header then r_record else r_header) ret;
+    d.k <- (if d.header_read then r_record else r_header) ret;
     result
 
   let decoder src =
@@ -217,7 +222,7 @@ module Nb = struct
     { src = (src :> src);
       b = Bigstring.create header_len;
       b_pos = 0;
-      after_header = false;
+      header_read = false;
       i; i_pos; i_max; k = r_header ret }
 
   let decode d = d.k d

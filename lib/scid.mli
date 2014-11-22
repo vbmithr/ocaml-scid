@@ -76,7 +76,9 @@ module Nb : sig
   val decoder : [< src] -> decoder
   (** [decoder src] is a decoder that inputs from src. *)
 
-  val decode : decoder -> [ `R of t | `Await | `End | `Error ]
+  val decode : decoder ->
+    [ `R of t | `Await | `End
+    | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of int ] ]
   (** [decode d] is:
       {ul
       {- [`Await] iff [d] has a [`Manual] input source and awaits
