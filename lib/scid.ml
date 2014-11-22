@@ -159,11 +159,8 @@ module Nb = struct
     d.i_pos <- Int.max_value;
     d.i_max <- 0
 
-  let decode_src d s =
-    let j = Bigsubstring.pos s in
-    let l = Bigsubstring.length s in
-    if (l = 0) then eoi d else
-      (d.i <- Bigsubstring.to_bigstring s; d.i_pos <- j; d.i_max <- j + l - 1;)
+  let decode_src d s j l =
+    if (l = 0) then eoi d else (d.i <- s; d.i_pos <- j; d.i_max <- j + l - 1;)
 
   let refill k d = match d.src with
     | `Manual -> d.k <- k; `Await
@@ -173,7 +170,7 @@ module Nb = struct
         try Bigstring.input ic d.i ~pos:0
         with Bigstring.IOError (rc, End_of_file) -> rc
       in
-      decode_src d @@ Bigsubstring.create d.i ~pos:0 ~len:rc;
+      decode_src d d.i 0 rc;
       k d
 
   let r_end k d =

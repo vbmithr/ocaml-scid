@@ -25,7 +25,7 @@ let main fn =
       | `Eof ->
         return acc
       | `Ok len ->
-        Scid.Nb.Manual.src d @@ Bigsubstring.create buf ~pos:0 ~len;
+        Scid.Nb.Manual.src d buf 0 len;
         read_forever acc
   in
   read_forever [] >>= fun recs ->

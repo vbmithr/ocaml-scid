@@ -22,7 +22,7 @@ module Decode = struct
   let empty_nb_manual ctx =
     let d = Scid.Nb.decoder @@ `Manual in
     assert_equal (Scid.Nb.decode d) `Await;
-    Scid.Nb.Manual.src d @@ Bigsubstring.create buf0;
+    Scid.Nb.Manual.src d buf0 0 0;
     assert_equal (Scid.Nb.decode d) `Await
 
   let invalid_hdr ctx =

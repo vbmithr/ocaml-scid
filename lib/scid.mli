@@ -126,7 +126,7 @@ module Nb : sig
   (** Manual sources and destinations. *)
   module Manual : sig
 
-    val src : decoder -> Bigsubstring.t -> unit
+    val src : decoder -> Bigstring.t -> int -> int -> unit
     (** [src d s k l] provides [d] with [l] bytes to read,
         starting at [k] in [s]. This byte range is read by calls to {!decode}
         with [d] until [`Await] is returned. To signal the end of input
