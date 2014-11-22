@@ -183,7 +183,8 @@ module Nb = struct
 
   let rec r_record k d =
     if d.i_pos > d.i_max then
-      (if Bigstring.length d.i = 0 then r_end k d else refill (r_record k) d)
+      (if Bigstring.length d.i = 0 && d.src <> `Manual
+       then r_end k d else refill (r_record k) d)
     else begin
       let want_read = record_len - d.b_pos in
       let can_read = d.i_max - d.i_pos + 1 in
@@ -195,7 +196,8 @@ module Nb = struct
 
   let rec r_header k d =
     if d.i_pos > d.i_max then
-      (if Bigstring.length d.i = 0 then r_end k d else refill (r_header k) d)
+      (if Bigstring.length d.i = 0 && d.src <> `Manual
+       then r_end k d else refill (r_header k) d)
     else begin
       let want_read = header_len - d.b_pos in
       let can_read = d.i_max - d.i_pos + 1 in

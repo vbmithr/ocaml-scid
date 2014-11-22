@@ -1,14 +1,12 @@
-open Scid
-
 let () =
   let ic = open_in_bin Sys.argv.(1) in
-  let d = Nb.decoder @@ `Channel ic in
+  let d = Scid.Nb.decoder @@ `Channel ic in
   let rec read_forever acc =
-    match Nb.decode d with
+    match Scid.Nb.decode d with
     | `R r -> read_forever @@ r::acc
     | `End -> acc
     | `Error `Invalid_header bs ->
-      Cstruct.(of_bigarray valid_header |> hexdump);
+      Cstruct.(of_bigarray Scid.valid_header |> hexdump);
       Cstruct.(of_bigarray bs |> hexdump);
       Printf.eprintf "Invalid header. aborting.\n"; exit 1
     | `Error `Bytes_unparsed nb ->
