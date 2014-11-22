@@ -5,24 +5,14 @@ let io_buffer_size = 4096
 let header_len = 56
 let record_len = 40
 
-let valid_header =
-  let header_len = Int32.of_int_exn header_len in
-  let record_len = Int32.of_int_exn record_len in
-  let hdr = Cstruct.create sizeof_intraday_header in
-  Bigarray.Array1.fill hdr.Cstruct.buffer '\000';
-  set_intraday_header_header "SCID" 0 hdr;
-  set_intraday_header_header_size hdr header_len;
-  set_intraday_header_record_size hdr record_len;
-  set_intraday_header_version hdr 1;
-  Cstruct.to_bigarray hdr
-
-let input_header ic buf =
-  Bigstring.really_input ic buf ~pos:0 ~len:header_len;
-  if buf <> valid_header
-  then invalid_arg "Corrupted SCID file."
-
-let output_header oc =
-  Bigstring.really_output oc valid_header ~pos:0 ~len:header_len
+let check_header bs = let open Bigstring in
+  true
+  && length bs = header_len
+  && sub_shared bs ~pos:0 ~len:4 = (of_string "SCID")
+  && unsafe_get_int32_le bs ~pos:4 = 56
+  && unsafe_get_int32_le bs ~pos:8 = 40
+  && unsafe_get_int16_le bs ~pos:12 = 1
+  && unsafe_get_int32_le bs ~pos:16 = 0
 
 (* The DateTime member variable is a double precision floating-point
     value. The integer part of the value is the number of days since
@@ -115,7 +105,6 @@ module B = struct
     end
 
   let rec r_header d =
-    assert (d.b_pos = 0);
     if d.i_pos > d.i_max
     then (if Bigstring.length d.i = 0 then r_end d else (refill d; r_header d))
     else begin
@@ -127,7 +116,7 @@ module B = struct
       if d.b_pos + len = header_len then
         begin
           d.b_pos <- 0; d.header_read <- true;
-          if d.b = valid_header then r_record d else `Error (`Invalid_header d.b)
+          if check_header d.b then r_record d else `Error (`Invalid_header d.b)
         end
       else (d.b_pos <- d.b_pos + len; r_header d)
     end
@@ -219,7 +208,7 @@ module Nb = struct
       if d.b_pos + len = header_len then
         begin
           d.b_pos <- 0; d.header_read <- true;
-          if d.b = valid_header then r_record k d else `Error (`Invalid_header d.b)
+          if check_header d.b then r_record k d else `Error (`Invalid_header d.b)
         end
       else (d.b_pos <- d.b_pos + len; r_header k d)
     end

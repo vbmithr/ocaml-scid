@@ -6,6 +6,7 @@ all: build
 
 build:
 	ocaml pkg/build.ml $(BUILDOPTS)
+	./suite.native
 
 install: build
 	opam-installer --prefix=$(PREFIX) $(PKG).install

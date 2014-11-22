@@ -13,6 +13,8 @@ type t = {
 }
 (** SierraChart's s_IntradayRecord *)
 
+val check_header : Bigstring.t -> bool
+
 (** Blocking streaming codec. *)
 module B : sig
 

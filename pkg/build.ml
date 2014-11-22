@@ -6,6 +6,7 @@ let () =
   Pkg.describe "scid" ~builder:`OCamlbuild [
     Pkg.lib "pkg/META";
     Pkg.lib ~exts:Exts.module_library "lib/scid";
+    Pkg.bin ~auto:true "lib_test/suite";
     Pkg.bin ~auto:true "lib_test/copy";
     Pkg.bin ~auto:true "lib_test/streaming";
   ]
