@@ -1,6 +1,6 @@
 version = "0.1"
 description = "Sierra Chart SCID files parser for OCaml"
-requires = "cstruct cstruct.syntax"
+requires = "core async"
 archive(byte) = "scid.cma"
 archive(byte, plugin) = "scid.cma"
 archive(native) = "scid.cmxa"
