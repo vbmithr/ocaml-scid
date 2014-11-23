@@ -2,6 +2,5 @@ true: debug, bin_annot
 <lib>: include
 <lib_test>: include
 
-<lib/types.*>: syntax(camlp4o), package(cstruct.syntax)
-<lib/scid.*>: package(cstruct), package(core), thread
-<lib_test/*.*>: package(cstruct), package(core), package(async), thread
+<lib/scid.*>: package(core), thread
+<lib_test/*.*>: package(core), package(async), thread

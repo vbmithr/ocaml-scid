@@ -1,18 +1,17 @@
 open Core.Std
-open Types
 
 let io_buffer_size = 4096
-let header_len = 56
-let record_len = 40
+let header_size = 56
+let record_size = 40
 
-let check_header bs = let open Bigstring in
+let check_header ?(pos=0) bs = let open Bigstring in
   true
-  && length bs = header_len
-  && sub_shared bs ~pos:0 ~len:4 = (of_string "SCID")
-  && unsafe_get_int32_le bs ~pos:4 = 56
-  && unsafe_get_int32_le bs ~pos:8 = 40
-  && unsafe_get_int16_le bs ~pos:12 = 1
-  && unsafe_get_int32_le bs ~pos:16 = 0
+  && length bs = header_size
+  && sub_shared bs ~pos ~len:4 = (of_string "SCID")
+  && unsafe_get_int32_le bs ~pos:(pos+4) = 56
+  && unsafe_get_int32_le bs ~pos:(pos+8) = 40
+  && unsafe_get_int16_le bs ~pos:(pos+12) = 1
+  && unsafe_get_int32_le bs ~pos:(pos+16) = 0
 
 (* The DateTime member variable is a double precision floating-point
     value. The integer part of the value is the number of days since
@@ -33,32 +32,32 @@ type t = {
   ask_volume: int
 }
 
-let of_bigstring ?off ?len buf =
-  let buf = Cstruct.of_bigarray ?off ?len buf in
-  let datetime = get_intraday_record_datetime buf |> Int64.float_of_bits |> unix_time_of_sc_time in
-  let o = get_intraday_record_o buf |> Int32.float_of_bits in
-  let h = get_intraday_record_h buf |> Int32.float_of_bits in
-  let l = get_intraday_record_l buf |> Int32.float_of_bits in
-  let c = get_intraday_record_c buf |> Int32.float_of_bits in
-  let num_trades = get_intraday_record_num_trades buf |> Int32.to_int_exn in
-  let total_volume = get_intraday_record_total_volume buf |> Int32.to_int_exn in
-  let bid_volume = get_intraday_record_bid_volume buf |> Int32.to_int_exn in
-  let ask_volume = get_intraday_record_ask_volume buf |> Int32.to_int_exn in
+let of_bigstring ?(pos=0) buf =
+  let open Bigstring in
+  let datetime = unsafe_get_int64_t_le ~pos buf |> Int64.float_of_bits in
+  let o = unsafe_get_int32_t_le ~pos:(pos+8) buf |> Int32.float_of_bits in
+  let h = unsafe_get_int32_t_le ~pos:(pos+12) buf |> Int32.float_of_bits in
+  let l = unsafe_get_int32_t_le ~pos:(pos+16) buf |> Int32.float_of_bits in
+  let c = unsafe_get_int32_t_le ~pos:(pos+20) buf |> Int32.float_of_bits in
+  let num_trades = unsafe_get_int32_le ~pos:(pos+24) buf in
+  let total_volume = unsafe_get_int32_le ~pos:(pos+28) buf in
+  let bid_volume = unsafe_get_int32_le buf ~pos:(pos+32) in
+  let ask_volume = unsafe_get_int32_le buf ~pos:(pos+36) in
   {
     datetime; o; h; l; c; num_trades; total_volume; bid_volume; ask_volume
   }
 
-let to_bigstring r ?off ?len buf =
-  let buf = Cstruct.of_bigarray ?off ?len buf in
-  r.datetime |> sc_time_of_unix_time |> Int64.bits_of_float |> set_intraday_record_datetime buf;
-  r.o |> Int32.bits_of_float |> set_intraday_record_o buf;
-  r.h |> Int32.bits_of_float |> set_intraday_record_h buf;
-  r.l |> Int32.bits_of_float |> set_intraday_record_l buf;
-  r.c |> Int32.bits_of_float |> set_intraday_record_c buf;
-  r.num_trades |> Int32.of_int_exn |> set_intraday_record_num_trades buf;
-  r.total_volume |> Int32.of_int_exn |> set_intraday_record_total_volume buf;
-  r.bid_volume |> Int32.of_int_exn |> set_intraday_record_bid_volume buf;
-  r.ask_volume |> Int32.of_int_exn |> set_intraday_record_ask_volume buf
+let to_bigstring r ?(pos=0) buf =
+  let open Bigstring in
+  r.datetime |> Int64.bits_of_float |> unsafe_set_int64_t_le buf ~pos;
+  r.o |> Int32.bits_of_float |> unsafe_set_int32_t_le buf ~pos:(pos+8);
+  r.h |> Int32.bits_of_float |> unsafe_set_int32_t_le buf ~pos:(pos+12);
+  r.l |> Int32.bits_of_float |> unsafe_set_int32_t_le buf ~pos:(pos+16);
+  r.c |> Int32.bits_of_float |> unsafe_set_int32_t_le buf ~pos:(pos+20);
+  r.num_trades |> unsafe_set_int32_le buf ~pos:(pos+24);
+  r.total_volume |> unsafe_set_int32_le buf ~pos:(pos+28);
+  r.bid_volume |> unsafe_set_int32_le buf ~pos:(pos+32);
+  r.ask_volume |> unsafe_set_int32_le buf ~pos:(pos+36)
 
 module B = struct
   type src = [ `Channel of in_channel | `Bigstring of Bigstring.t ]
@@ -95,12 +94,12 @@ module B = struct
     if d.i_pos > d.i_max
     then (if Bigstring.length d.i = 0 then r_end d else (refill d; r_record d))
     else begin
-      let want_read = record_len - d.b_pos in
+      let want_read = record_size - d.b_pos in
       let can_read = d.i_max - d.i_pos + 1 in
       let len = min can_read want_read in
       Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
       d.i_pos <- d.i_pos + len;
-      if d.b_pos + len = record_len then (d.b_pos <- 0; `R (of_bigstring d.b))
+      if d.b_pos + len = record_size then (d.b_pos <- 0; `R (of_bigstring d.b))
       else (d.b_pos <- d.b_pos + len; r_record d)
     end
 
@@ -108,12 +107,12 @@ module B = struct
     if d.i_pos > d.i_max
     then (if Bigstring.length d.i = 0 then r_end d else (refill d; r_header d))
     else begin
-      let want_read = header_len - d.b_pos in
+      let want_read = header_size - d.b_pos in
       let can_read = d.i_max - d.i_pos + 1 in
       let len = min can_read want_read in
       Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
       d.i_pos <- d.i_pos + len;
-      if d.b_pos + len = header_len then
+      if d.b_pos + len = header_size then
         begin
           d.b_pos <- 0; d.header_read <- true;
           if check_header d.b then r_record d else `Error (`Invalid_header d.b)
@@ -127,7 +126,7 @@ module B = struct
       | `Channel _ -> Bigstring.create io_buffer_size, Int.max_value, 0
     in
     { src = (src :> src);
-      b = Bigstring.create header_len;
+      b = Bigstring.create header_size;
       b_pos = 0;
       header_read = false;
       i; i_pos; i_max; }
@@ -185,7 +184,7 @@ module Nb = struct
       (if Bigstring.length d.i = 0 && d.src <> `Manual
        then r_end k d else refill (r_record k) d)
     else begin
-      let want_read = record_len - d.b_pos in
+      let want_read = record_size - d.b_pos in
       let can_read = d.i_max - d.i_pos + 1 in
       let len = min can_read want_read in
       Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
@@ -198,12 +197,12 @@ module Nb = struct
       (if Bigstring.length d.i = 0 && d.src <> `Manual
        then r_end k d else refill (r_header k) d)
     else begin
-      let want_read = header_len - d.b_pos in
+      let want_read = header_size - d.b_pos in
       let can_read = d.i_max - d.i_pos + 1 in
       let len = min can_read want_read in
       Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
       d.i_pos <- d.i_pos + len;
-      if d.b_pos + len = header_len then
+      if d.b_pos + len = header_size then
         begin
           d.b_pos <- 0; d.header_read <- true;
           if check_header d.b then r_record k d else `Error (`Invalid_header d.b)
@@ -222,7 +221,7 @@ module Nb = struct
       | `Channel _ -> Bigstring.create io_buffer_size, Int.max_value, 0
     in
     { src = (src :> src);
-      b = Bigstring.create header_len;
+      b = Bigstring.create header_size;
       b_pos = 0;
       header_read = false;
       i; i_pos; i_max; k = r_header ret }

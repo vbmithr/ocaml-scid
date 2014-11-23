@@ -12,11 +12,9 @@ let main fn =
     | `R r -> read_forever @@ r::acc
     | `End -> return acc
     | `Error `Invalid_header bs ->
-      Cstruct.(of_bigarray bs |> hexdump);
       Printf.eprintf "Invalid header. aborting.\n";
       return []
     | `Error `Bytes_unparsed bs ->
-      Cstruct.(of_bigarray bs |> hexdump);
       Printf.eprintf "Error while parsing: %d bytes not parsed.\n"
         (Bigstring.length bs);
       return acc

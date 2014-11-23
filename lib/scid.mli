@@ -13,7 +13,12 @@ type t = {
 }
 (** SierraChart's s_IntradayRecord *)
 
-val check_header : Bigstring.t -> bool
+val of_bigstring : ?pos:int -> Bigstring.t -> t
+val to_bigstring : t -> ?pos:int -> Bigstring.t -> unit
+
+val header_size : int
+val record_size : int
+val check_header : ?pos:int -> Bigstring.t -> bool
 
 (** Blocking streaming codec. *)
 module B : sig

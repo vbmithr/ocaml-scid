@@ -1,12 +1,19 @@
 open Core.Std
 open OUnit2
 
+let random_r = Bigstring.create Scid.record_size
+
+let decode_recode ctx =
+  let r = Bigstring.create Scid.record_size in
+  Scid.(to_bigstring (of_bigstring random_r ~pos:0) ~pos:0 r);
+  assert_equal random_r r
+
 module Decode = struct
   let buf0 = Bigstring.create 0
   let buf3 = Bigstring.create 3
-  let good_hdr = Bigstring.create 56
+  let good_hdr = Bigstring.create Scid.header_size
   let bad_hdr =
-    let b = Bigstring.init 56 (fun _ -> '\000') in
+    let b = Bigstring.init Scid.header_size (fun _ -> '\000') in
     let h = "SCID\070\000\000\000\050\000\000\000\001\000" in
     Bigstring.From_string.blit ~src:h ~dst:b ~src_pos:0 ~dst_pos:0 ~len:14;
     b
@@ -48,6 +55,7 @@ end
 let suite =
   "decode" >:::
   Decode.[
+    "decode_recode" >:: decode_recode;
     "empty" >:: empty;
     "empty_nb" >:: empty_nb;
     "empty_nb_manual" >:: empty_nb_manual;
