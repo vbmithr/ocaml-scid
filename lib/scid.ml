@@ -63,75 +63,75 @@ module B = struct
   type src = [ `Fd of UnixLabels.file_descr | `Bigstring of Bigstring.t ]
   type decoder = {
     src: src;
-    b: Bigstring.t;
-    mutable header_read: bool;
-    mutable b_pos: int;
+    mutable header_read: [`None | `Good | `Bad];
     mutable i: Bigstring.t;
-    mutable i_pos: int;
-    mutable i_max: int;
+    mutable i_read: int;
+    mutable i_written: int;
   }
 
-  let eoi d =
-    d.i <- Bigstring.create 0;
-    d.i_pos <- Int.max_value;
-    d.i_max <- 0
+  (* This is correct because of the chosen bufsize for the `Fd
+     source. A buffer of size 4096 can exactly contain a header and
+     101 records. Unparsed bytes can never wrap around the buffer. *)
+  let r_end d =
+    if d.i_read = d.i_written then `End
+    else
+      begin
+        let pos = (d.i_read mod Bigstring.length d.i) in
+        let len = d.i_written - d.i_read in
+        d.i_read <- d.i_written;
+        `Error (`Bytes_unparsed (Bigstring.sub d.i ~pos ~len))
+      end
 
   let refill d = match d.src with
-    | `Bigstring _ -> eoi d
+    | `Bigstring _ -> 0
     | `Fd fd ->
+      let bufsize = Bigstring.length d.i in
+      let len = min
+          (bufsize - (d.i_written mod bufsize))
+          (bufsize + d.i_read - d.i_written) in
       let rc =
-        try Bigstring.read fd d.i ~pos:0
+        try Bigstring.read fd d.i ~pos:d.i_written ~len
         with Bigstring.IOError (rc, End_of_file) -> rc in
-      if rc = 0 then (eoi d) else (d.i_pos <- 0; d.i_max <- rc - 1;)
-
-  let r_end d = if d.b_pos = 0 then `End
-    else
-      let len = d.b_pos in
-      d.b_pos <- 0;
-      `Error (`Bytes_unparsed (Bigstring.sub d.b ~pos:0 ~len))
+      d.i_written <- d.i_written + rc;
+      rc
 
   let rec r_record d =
-    if d.i_pos > d.i_max
-    then (if Bigstring.length d.i = 0 then r_end d else (refill d; r_record d))
-    else begin
-      let want_read = record_size - d.b_pos in
-      let can_read = d.i_max - d.i_pos + 1 in
-      let len = min can_read want_read in
-      Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
-      d.i_pos <- d.i_pos + len;
-      if d.b_pos + len = record_size then (d.b_pos <- 0; `R (of_bigstring d.b))
-      else (d.b_pos <- d.b_pos + len; r_record d)
-    end
+    if d.i_read = d.i_written
+    then (let rc = refill d in if rc = 0 then r_end d else r_record d)
+    else if d.i_written - d.i_read >= record_size then
+      begin
+        d.i_read <- d.i_read + record_size;
+        `R (of_bigstring d.i ~pos:(d.i_read mod Bigstring.length d.i))
+      end
+    else
+      let rc = refill d in if rc = 0 then r_end d else r_record d
 
   let rec r_header d =
-    if d.i_pos > d.i_max
-    then (if Bigstring.length d.i = 0 then r_end d else (refill d; r_header d))
-    else begin
-      let want_read = header_size - d.b_pos in
-      let can_read = d.i_max - d.i_pos + 1 in
-      let len = min can_read want_read in
-      Bigstring.blit ~src:d.i ~src_pos:d.i_pos ~dst:d.b ~dst_pos:d.b_pos ~len;
-      d.i_pos <- d.i_pos + len;
-      if d.b_pos + len = header_size then
-        begin
-          d.b_pos <- 0; d.header_read <- true;
-          if check_header d.b then r_record d else `Error (`Invalid_header d.b)
-        end
-      else (d.b_pos <- d.b_pos + len; r_header d)
-    end
+    if d.i_read = d.i_written
+    then (let rc = refill d in if rc = 0 then r_end d else r_header d)
+    else if d.i_written - d.i_read >= header_size then
+      begin
+        d.i_read <- d.i_read + header_size;
+        if check_header d.i then
+          (d.header_read <- `Good; r_record d)
+        else
+          (d.header_read <- `Bad;
+           `Error (`Invalid_header (Bigstring.sub d.i ~pos:0 ~len:header_size)))
+      end
+    else
+      let rc = refill d in if rc = 0 then r_end d else r_header d
 
   let decoder src =
-    let i, i_pos, i_max = match src with
-      | `Bigstring s -> s, 0, Bigstring.length s - 1
-      | `Fd _ -> Bigstring.create io_buffer_size, Int.max_value, 0
+    let i, i_read, i_written = match src with
+      | `Bigstring s -> s, 0, Bigstring.length s
+      | `Fd _ -> Bigstring.create io_buffer_size, 0, 0
     in
-    { src = (src :> src);
-      b = Bigstring.create header_size;
-      b_pos = 0;
-      header_read = false;
-      i; i_pos; i_max; }
+    { src = (src :> src); header_read = `None; i; i_read; i_written; }
 
-  let decode d = if d.header_read then r_record d else r_header d
+  let decode d = match d.header_read with
+    | `None -> r_header d
+    | `Good -> r_record d
+    | `Bad -> r_end d
 
   (* Encoding *)
 
