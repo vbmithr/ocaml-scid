@@ -10,18 +10,18 @@ let () =
     match Scid.Nb.decode d with
     | `R r -> decode @@ r::acc
     | `End -> assert false
-    | `Error `Invalid_header bs ->
+    | `Error `Header_invalid bs ->
       Printf.eprintf "Invalid header. aborting.\n"; exit 1
     | `Error `Bytes_unparsed bs ->
       Printf.eprintf "Error while parsing: %d bytes not parsed.\n"
         (Bigstring.length bs); exit 1
-    | `Await ->
+    | `Await pos ->
       let rc =
-        try Bigstring.read fd buf
+        try Bigstring.read fd buf ~pos
         with Bigstring.IOError (rc, End_of_file) -> rc
       in if rc > 0 then
         begin
-          Scid.Nb.Manual.src d buf 0 rc;
+          Scid.Nb.Manual.src d buf pos rc;
           decode acc
         end
       else acc

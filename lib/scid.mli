@@ -36,7 +36,7 @@ module B : sig
 
   val decode : decoder ->
     [ `R of t | `End
-    | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
+    | `Error of [`Header_invalid of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
   (** [decode d] is :
       {ul
       {- [`R r], if a record [r] was decoded.}
@@ -81,8 +81,8 @@ module Nb : sig
   (** [decoder src] is a decoder that inputs from src. *)
 
   val decode : decoder ->
-    [ `R of t | `Await | `End
-    | `Error of [`Invalid_header of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
+    [ `R of t | `Await of int | `End
+    | `Error of [`Header_invalid of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
   (** [decode d] is:
       {ul
       {- [`Await] iff [d] has a [`Manual] input source and awaits

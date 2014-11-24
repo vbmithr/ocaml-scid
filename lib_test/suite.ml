@@ -14,18 +14,18 @@ module Decode = struct
   let bad_hdr = Bigstring.init Scid.header_size (fun _ -> '\000')
   let good_hdr =
     let b = Bigstring.init Scid.header_size (fun _ -> '\000') in
-    let h = "SCID\070\000\000\000\050\000\000\000\001\000" in
+    let h = "SCID8\000\000\000(\000\000\000\001\000" in
     Bigstring.From_string.blito ~src:h ~dst:b ();
     b
 
   let printer = function
     | `End -> "End"
     | `R r -> "R"
-    | `Error (`Invalid_header hdr) ->
+    | `Error (`Header_invalid hdr) ->
       Printf.sprintf "Invalid_hdr %S" (Bigstring.to_string hdr)
     | `Error (`Bytes_unparsed hdr) ->
       Printf.sprintf "Bytes_unparsed %S" (Bigstring.to_string hdr)
-    | `Await -> "Await"
+    | `Await n -> Printf.sprintf "Await %d" n
 
   let empty ctx =
     let d = Scid.B.decoder @@ `Bigstring buf0 in
@@ -37,9 +37,9 @@ module Decode = struct
 
   let empty_nb_manual ctx =
     let d = Scid.Nb.decoder @@ `Manual in
-    assert_equal ~printer `Await (Scid.Nb.decode d);
+    assert_equal ~printer (`Await 0) (Scid.Nb.decode d);
     Scid.Nb.Manual.src d buf0 0 0;
-    assert_equal ~printer `Await (Scid.Nb.decode d)
+    assert_equal ~printer (`Await 0) (Scid.Nb.decode d)
 
   let incomplete_hdr ctx =
     let d = Scid.B.decoder @@ `Bigstring buf3 in
@@ -56,10 +56,23 @@ module Decode = struct
     assert_equal ~printer `End (Scid.B.decode d);
     Unix.close rd
 
+  let valid_hdr ctx =
+    let d = Scid.B.decoder @@ `Bigstring good_hdr in
+    assert_equal ~printer `End (Scid.B.decode d)
+
   let invalid_hdr ctx =
     let d = Scid.B.decoder @@ `Bigstring bad_hdr in
-    assert_equal ~printer (`Error (`Invalid_header bad_hdr)) (Scid.B.decode d);
+    assert_equal ~printer (`Error (`Header_invalid bad_hdr)) (Scid.B.decode d);
     assert_equal ~printer `End (Scid.B.decode d)
+
+  let valid_hdr_fd ctx =
+    let (rd, wr) = Unix.pipe () in
+    let nb_written = Bigstring.write wr good_hdr in
+    Unix.close wr;
+    assert_equal Scid.header_size nb_written;
+    let d = Scid.B.decoder @@ `Fd rd in
+    assert_equal ~printer `End (Scid.B.decode d);
+    Unix.close rd
 
   let invalid_hdr_fd ctx =
     let (rd, wr) = Unix.pipe () in
@@ -67,7 +80,7 @@ module Decode = struct
     Unix.close wr;
     assert_equal Scid.header_size nb_written;
     let d = Scid.B.decoder @@ `Fd rd in
-    assert_equal ~printer (`Error (`Invalid_header bad_hdr)) (Scid.B.decode d);
+    assert_equal ~printer (`Error (`Header_invalid bad_hdr)) (Scid.B.decode d);
     assert_equal ~printer `End (Scid.B.decode d);
     Unix.close rd
 
@@ -78,8 +91,41 @@ module Decode = struct
 
   let invalid_hdr_nb ctx =
     let d = Scid.Nb.decoder @@ `Bigstring bad_hdr in
-    assert_equal ~printer (`Error (`Invalid_header bad_hdr)) (Scid.Nb.decode d);
+    assert_equal ~printer (`Error (`Header_invalid bad_hdr)) (Scid.Nb.decode d);
     assert_equal ~printer `End (Scid.Nb.decode d)
+
+  let incomplete_hdr_fd_nb ctx =
+    let (rd, wr) = Unix.pipe () in
+    let nb_written = Bigstring.write wr buf3 in
+    Unix.close wr;
+    assert_equal 3 nb_written;
+    let d = Scid.Nb.decoder @@ `Fd rd in
+    assert_equal ~printer (`Error (`Bytes_unparsed buf3)) (Scid.Nb.decode d);
+    assert_equal ~printer `End (Scid.Nb.decode d);
+    Unix.close rd
+
+  let invalid_hdr_fd_nb ctx =
+    let (rd, wr) = Unix.pipe () in
+    let nb_written = Bigstring.write wr bad_hdr in
+    Unix.close wr;
+    assert_equal Scid.header_size nb_written;
+    let d = Scid.Nb.decoder @@ `Fd rd in
+    assert_equal ~printer (`Error (`Header_invalid bad_hdr)) (Scid.Nb.decode d);
+    assert_equal ~printer `End (Scid.Nb.decode d);
+    Unix.close rd
+
+  let incomplete_hdr_manual ctx =
+    let d = Scid.Nb.decoder `Manual in
+    assert_equal ~printer (`Await 0) (Scid.Nb.decode d);
+    Scid.Nb.Manual.src d buf3 0 3;
+    assert_equal ~printer (`Await 0) (Scid.Nb.decode d);
+    assert_equal ~printer (`Await 0) (Scid.Nb.decode d)
+
+  let invalid_hdr_manual ctx =
+    let d = Scid.Nb.decoder `Manual in
+    Scid.Nb.Manual.src d bad_hdr 0 Scid.header_size;
+    assert_equal ~printer (`Error (`Header_invalid bad_hdr)) (Scid.Nb.decode d);
+    assert_equal ~printer (`Await 56) (Scid.Nb.decode d)
 end
 
 module Encode = struct
@@ -97,9 +143,15 @@ let suite =
     "incomplete_hdr_fd" >:: incomplete_hdr_fd;
     "invalid_hdr" >:: invalid_hdr;
     "invalid_hdr_fd" >:: invalid_hdr_fd;
+    "valid_hdr" >:: valid_hdr;
+    "valid_hdr_fd" >:: valid_hdr_fd;
 
     "incomplete_hdr_nb" >:: incomplete_hdr_nb;
     "invalid_hdr_nb" >:: invalid_hdr_nb;
+    "incomplete_hdr_fd_nb" >:: incomplete_hdr_fd_nb;
+    "invalid_hdr_fd_nb" >:: invalid_hdr_fd_nb;
+    "incomplete_hdr_manual" >:: incomplete_hdr_manual;
+    "invalid_hdr_manual" >:: invalid_hdr_manual;
   ]
 
 let () = run_test_tt_main suite
