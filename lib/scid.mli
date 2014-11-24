@@ -25,7 +25,7 @@ module B : sig
 
   (** {1 Decoding} *)
 
-  type src = [ `Channel of in_channel | `Bigstring of Bigstring.t ]
+  type src = [ `Fd of UnixLabels.file_descr | `Bigstring of Bigstring.t ]
   (** The type for input sources. *)
 
   type decoder
@@ -50,7 +50,7 @@ module B : sig
 
   (** {1 Encoding} *)
 
-  type dst = [ `Channel of out_channel | `Bigbuffer of Bigbuffer.t ]
+  type dst = [ `Fd of UnixLabels.file_descr | `Bigbuffer of Bigbuffer.t ]
   (** The type for output destinations. *)
 
   (* type encoder *)
@@ -71,7 +71,7 @@ module Nb : sig
 
   (** {1 Decoding} *)
 
-  type src = [ `Channel of in_channel | `Bigstring of Bigstring.t | `Manual ]
+  type src = [ `Fd of UnixLabels.file_descr | `Bigstring of Bigstring.t | `Manual ]
   (** The type for input sources. *)
 
   type decoder

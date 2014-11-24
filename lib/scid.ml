@@ -60,7 +60,7 @@ let to_bigstring r ?(pos=0) buf =
   r.ask_volume |> unsafe_set_int32_le buf ~pos:(pos+36)
 
 module B = struct
-  type src = [ `Channel of in_channel | `Bigstring of Bigstring.t ]
+  type src = [ `Fd of UnixLabels.file_descr | `Bigstring of Bigstring.t ]
   type decoder = {
     src: src;
     b: Bigstring.t;
@@ -78,9 +78,9 @@ module B = struct
 
   let refill d = match d.src with
     | `Bigstring _ -> eoi d
-    | `Channel ic ->
+    | `Fd fd ->
       let rc =
-        try Bigstring.input ic d.i ~pos:0
+        try Bigstring.read fd d.i ~pos:0
         with Bigstring.IOError (rc, End_of_file) -> rc in
       if rc = 0 then (eoi d) else (d.i_pos <- 0; d.i_max <- rc - 1;)
 
@@ -123,7 +123,7 @@ module B = struct
   let decoder src =
     let i, i_pos, i_max = match src with
       | `Bigstring s -> s, 0, Bigstring.length s - 1
-      | `Channel _ -> Bigstring.create io_buffer_size, Int.max_value, 0
+      | `Fd _ -> Bigstring.create io_buffer_size, Int.max_value, 0
     in
     { src = (src :> src);
       b = Bigstring.create header_size;
@@ -135,11 +135,11 @@ module B = struct
 
   (* Encoding *)
 
-  type dst = [ `Channel of out_channel | `Bigbuffer of Bigbuffer.t ]
+  type dst = [ `Fd of UnixLabels.file_descr | `Bigbuffer of Bigbuffer.t ]
 end
 
 module Nb = struct
-  type src = [ `Channel of in_channel | `Bigstring of Bigstring.t | `Manual ]
+  type src = [ `Fd of UnixLabels.file_descr | `Bigstring of Bigstring.t | `Manual ]
   type decoder = {
     src: src;
     b: Bigstring.t;
@@ -164,9 +164,9 @@ module Nb = struct
   let refill k d = match d.src with
     | `Manual -> d.k <- k; `Await
     | `Bigstring _ -> eoi d; k d
-    | `Channel ic ->
+    | `Fd fd ->
       let rc =
-        try Bigstring.input ic d.i ~pos:0
+        try Bigstring.read fd d.i ~pos:0
         with Bigstring.IOError (rc, End_of_file) -> rc
       in
       decode_src d d.i 0 rc;
@@ -218,7 +218,7 @@ module Nb = struct
     let i, i_pos, i_max = match src with
       | `Manual -> Bigstring.create 0, Int.max_value, 0
       | `Bigstring s -> s, 0, Bigstring.length s - 1
-      | `Channel _ -> Bigstring.create io_buffer_size, Int.max_value, 0
+      | `Fd _ -> Bigstring.create io_buffer_size, Int.max_value, 0
     in
     { src = (src :> src);
       b = Bigstring.create header_size;
