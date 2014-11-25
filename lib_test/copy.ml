@@ -6,7 +6,7 @@ let io_buffer_size = 4096
 let main fn =
   Reader.open_file fn >>= fun r ->
   let buf = Bigstring.create io_buffer_size in
-  let d = Scid.Nb.decoder `Manual in
+  let d = Scid.Nb.decoder @@ `Manual buf in
   let rec read_forever acc =
     match Scid.Nb.decode d with
     | `R r -> read_forever @@ r::acc
@@ -19,10 +19,10 @@ let main fn =
       Printf.eprintf "Error while parsing: %d bytes not parsed.\n"
         (Bigstring.length bs);
       return acc
-    | `Await pos ->
-      Reader.read_bigsubstring r @@ Bigsubstring.create buf ~pos >>= function
+    | `Await (pos, len) ->
+      Reader.read_bigsubstring r @@ Bigsubstring.create buf ~pos ~len >>= function
       | `Eof -> return acc
-      | `Ok len -> Scid.Nb.Manual.src d buf pos len; read_forever acc
+      | `Ok len -> Scid.Nb.Manual.src d buf len; read_forever acc
   in
   read_forever [] >>= fun recs ->
   Printf.printf "Read %d records.\n%!" (List.length recs);

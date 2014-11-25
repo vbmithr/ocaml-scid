@@ -33,6 +33,12 @@ type t = {
   ask_volume: int
 }
 
+let empty =
+  { datetime = 0.; o = 0.; h = 0.; l = 0.; c = 0.;
+    num_trades = 0; total_volume = 0; bid_volume = 0;
+    ask_volume = 0;
+  }
+
 let of_bigstring ?(pos=0) buf =
   let open Bigstring in
   let datetime = unsafe_get_int64_t_le ~pos buf |> Int64.float_of_bits in
@@ -136,7 +142,7 @@ module B = struct
 end
 
 module Nb = struct
-  type src = [ `Fd of UnixLabels.file_descr | `Bigstring of Bigstring.t | `Manual ]
+  type src = [ `Fd of UnixLabels.file_descr | `Manual of Bigstring.t ]
 
     type decoder = {
     src: src;
@@ -145,7 +151,7 @@ module Nb = struct
     mutable i_read: int;
     mutable i_written: int;
     mutable k: decoder ->
-      [ `R of t | `Await of int | `End
+      [ `R of t | `Await of int * int | `End
       | `Error of [ `Bytes_unparsed of Bigstring.t | `Header_invalid of Bigstring.t ] ]; }
 
   (* This is correct because of the chosen bufsize for the `Fd
@@ -161,25 +167,28 @@ module Nb = struct
         `Error (`Bytes_unparsed (Bigstring.sub d.i ~pos ~len))
       end
 
-  let refill k d = match d.src with
-    | `Bigstring _ -> r_end d
-    | `Fd fd ->
-      let bufsize = Bigstring.length d.i in
+  let refill k d =
+    let bufsize = Bigstring.length d.i in
+    if bufsize = 0 then r_end d
+    else
+      let pos = (d.i_written mod bufsize) in
       let len = min
-          (bufsize - (d.i_written mod bufsize))
+          (bufsize - pos)
           (bufsize + d.i_read - d.i_written) in
-      let rc =
-        try Bigstring.read fd d.i ~pos:d.i_written ~len
-        with Bigstring.IOError (rc, End_of_file) -> rc in
-      d.i_written <- d.i_written + rc;
-      if rc > 0 then k d else r_end d
-    | `Manual -> d.k <- k; `Await d.i_read
+      match d.src with
+      | `Manual _ -> d.k <- k; `Await (pos, len)
+      | `Fd fd ->
+        let rc =
+          try Bigstring.read fd d.i ~pos ~len
+          with Bigstring.IOError (rc, End_of_file) -> rc in
+        d.i_written <- d.i_written + rc;
+        if rc > 0 then k d else r_end d
 
   let rec r_record k d =
     if d.i_written - d.i_read >= record_size then
       begin
         d.i_read <- d.i_read + record_size;
-        `R (of_bigstring d.i ~pos:(d.i_read mod Bigstring.length d.i))
+        k d @@ `R (of_bigstring d.i ~pos:(d.i_read mod Bigstring.length d.i))
       end
     else refill (r_record k) d
 
@@ -191,23 +200,25 @@ module Nb = struct
           (d.header_read <- `Good; r_record k d)
         else
           (d.header_read <- `Bad;
-           `Error (`Header_invalid (Bigstring.sub d.i ~pos:0 ~len:header_size)))
+           k d @@ `Error (`Header_invalid (Bigstring.sub d.i ~pos:0 ~len:header_size)))
       end
     else refill (r_header k) d
 
-  let rec ret d result = d.k <- r_header ret; result
+  let rec ret d result =
+    d.k <- if d.header_read = `Good then r_record ret else r_header ret;
+    result
+
   let decoder src =
     let i, i_read, i_written = match src with
-      | `Bigstring s -> s, 0, Bigstring.length s
       | `Fd _ -> Bigstring.create io_buffer_size, 0, 0
-      | `Manual -> Bigstring.create 0, 0, 0
+      | `Manual s -> s, 0, 0
     in
     { src = (src :> src); header_read = `None; i; i_read; i_written;
       k = r_header ret
     }
 
-  let decode_src d buf read written =
-    d.i <- buf; d.i_read <- read; d.i_written <- written
+  let decode_src d buf written =
+    d.i <- buf; d.i_written <- d.i_written + written
 
   let decode d = d.k d
 

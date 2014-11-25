@@ -13,6 +13,9 @@ type t = {
 }
 (** SierraChart's s_IntradayRecord *)
 
+val empty : t
+(** [empty] is a record where all fields are zero. *)
+
 val of_bigstring : ?pos:int -> Bigstring.t -> t
 val to_bigstring : t -> ?pos:int -> Bigstring.t -> unit
 
@@ -71,7 +74,7 @@ module Nb : sig
 
   (** {1 Decoding} *)
 
-  type src = [ `Fd of UnixLabels.file_descr | `Bigstring of Bigstring.t | `Manual ]
+  type src = [ `Fd of UnixLabels.file_descr | `Manual of Bigstring.t ]
   (** The type for input sources. *)
 
   type decoder
@@ -81,7 +84,7 @@ module Nb : sig
   (** [decoder src] is a decoder that inputs from src. *)
 
   val decode : decoder ->
-    [ `R of t | `Await of int | `End
+    [ `R of t | `Await of int * int | `End
     | `Error of [`Header_invalid of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
   (** [decode d] is:
       {ul
@@ -131,11 +134,13 @@ module Nb : sig
   (** Manual sources and destinations. *)
   module Manual : sig
 
-    val src : decoder -> Bigstring.t -> int -> int -> unit
-    (** [src d s k l] provides [d] with [l] bytes to read,
-        starting at [k] in [s]. This byte range is read by calls to {!decode}
-        with [d] until [`Await] is returned. To signal the end of input
-        call the function with [l = 0].
+    val src : decoder -> Bigstring.t -> int -> unit
+    (** [src d s l] provides [d] with [l] bytes to read in [s]. The
+        decoder knows where it should read the data in, and the former
+        [`Await] tells you where you should write data in. This byte
+        range is read by calls to {!decode} with [d] until [`Await] is
+        returned. To signal the end of input call the function with [l
+        = 0].
 
         {b Warning.} Do not use with non-[`Manual] decoder sources. *)
 
