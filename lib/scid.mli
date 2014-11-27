@@ -1,161 +1,84 @@
-open Core.Std
+module H : sig
+  type state = [ `Checking of int | `Valid | `Invalid ]
 
-type t = {
-  datetime : float;
-  o : float;
-  h : float;
-  l : float;
-  c : float;
-  num_trades : int;
-  total_volume : int;
-  bid_volume : int;
-  ask_volume : int;
-}
-(** SierraChart's s_IntradayRecord *)
+  val size : int
+  (** [size] is the size of the SCID header, in Bytes.t. *)
 
-val empty : t
-(** [empty] is a record where all fields are zero. *)
+  val check : Bytes.t -> state -> int -> int -> state
+  (** [check ~pos b] is [true] iff there is a valid SCID header in [b]
+      starting at offset [pos]. *)
 
-val of_bigstring : ?pos:int -> Bigstring.t -> t
-val to_bigstring : t -> ?pos:int -> Bigstring.t -> unit
-
-val header_size : int
-val record_size : int
-val check_header : ?pos:int -> Bigstring.t -> bool
-
-(** Blocking streaming codec. *)
-module B : sig
-
-  (** {1 Decoding} *)
-
-  type src = [ `Fd of UnixLabels.file_descr | `Bigstring of Bigstring.t ]
-  (** The type for input sources. *)
-
-  type decoder
-  (** The type for R decoders. *)
-
-  val decoder : [< src] -> decoder
-  (** [decoder src] is a decoder that inputs from [src]. *)
-
-  val decode : decoder ->
-    [ `R of t | `End
-    | `Error of [`Header_invalid of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
-  (** [decode d] is :
-      {ul
-      {- [`R r], if a record [r] was decoded.}
-      {- [`End], if the end of input was reached.}
-      {- [`Error reason], if an error occured. If you are interested in
-         a best-effort decoding you can still continue to decode
-         after an error.}}
-
-      {b Note.} Repeated invocation always eventually returns [`End], even in
-      case of errors. *)
-
-  (** {1 Encoding} *)
-
-  type dst = [ `Fd of UnixLabels.file_descr | `Bigbuffer of Bigbuffer.t ]
-  (** The type for output destinations. *)
-
-  (* type encoder *)
-  (* (\** The type for R encoders. *\) *)
-
-  (* val encoder : [< dst] -> encoder *)
-  (* (\** [encoder dst] is an encoder that outputs to [dst]. *\) *)
-
-  (* val encode : encoder -> [< `R of t | `End ] -> unit *)
-  (* (\** [encode e v] encodes [v] on [e]. *)
-
-  (*     {b Raises.} [Invalid_argument] if a non well-formed sequence *)
-  (*     of records is encoded. *\) *)
+  val write : Bytes.t -> int -> unit
+  (** [write ~pos b] write a valid SCID header in [b] at offset
+      [pos]. *)
 end
 
-(** Non-blocking streaming codec. *)
-module Nb : sig
+module R : sig
+  type t = {
+    datetime : float;
+    o : float;
+    h : float;
+    l : float;
+    c : float;
+    num_trades : int;
+    total_volume : int;
+    bid_volume : int;
+    ask_volume : int;
+  }
+  (** SierraChart's s_IntradayRecord *)
 
-  (** {1 Decoding} *)
+  val size : int
+  (** [size] is the size of a (serialized) record, in Bytes.t. *)
 
-  type src = [ `Fd of UnixLabels.file_descr | `Manual of Bigstring.t ]
+  val empty : t
+  (** [empty] is a record where all fields are zero. *)
+
+  val read : Bytes.t -> int -> t
+  (** [read ~pos b] is the record serialized in [b] at offset
+      [pos]. *)
+
+  val write : t -> Bytes.t -> int -> unit
+  (** [write t ~pos b] writes [t] in [b] at offset [pos]. *)
+end
+
+(** {1 Decoding} *)
+
+module D : sig
+  type src = [ `Channel of in_channel | `Bytes of Bytes.t | `Manual ]
   (** The type for input sources. *)
 
-  type decoder
-  (** The type for R decoders. *)
+  type e = [ `Header_invalid | `Bytes_unparsed of Bytes.t ]
+  (** The type of errors. *)
 
-  val decoder : [< src] -> decoder
+  type t
+  (** The type for decoders. *)
+
+  val make : [< src] -> t
   (** [decoder src] is a decoder that inputs from src. *)
 
-  val decode : decoder ->
-    [ `R of t | `Await of int * int | `End
-    | `Error of [`Header_invalid of Bigstring.t | `Bytes_unparsed of Bigstring.t ] ]
-  (** [decode d] is:
-      {ul
-      {- [`Await] iff [d] has a [`Manual] input source and awaits
-         for more input. The client must use {!Manual.src} to provide it.}
-      {- [`R r], if a record [r] was decoded.}
-      {- [`End], if the end of input was reached.}
-      {- [`Error], if an error occured. If you are interested in
-         a best-effort decoding you can still continue to decode
-         after an error.}}
+  val decode : t -> [ `Yield of R.t | `Await | `End | `Error of e ]
 
-      {b Note.} Repeated invocation always eventually returns [`End], even in
-      case of errors. *)
+  module Manual : sig
+    val src : t -> Bytes.t -> int -> int -> unit
+  end
+end
 
-  (** {1 Encoding} *)
+(** {1 Encoding} *)
 
-  type dst = [ `Channel of out_channel | `Bigbuffer of Bigbuffer.t | `Manual ]
+module E : sig
+  type dst = [ `Channel of out_channel | `Buffer of Buffer.t | `Manual ]
   (** The type for output destinations. *)
 
-  type encoder
+  type t
   (** The type for R encoders. *)
 
-  (* val encoder : [< dst] -> encoder *)
-  (* (\** [encoder dst] is an encoder that outputs to [dst]. *\) *)
+  val make : [< dst] -> t
+  (** [encoder dst] is an encoder that outputs to [dst]. *)
 
-  (* val encode : encoder -> [< `Await | `R of t | `End ] -> *)
-  (*   [ `Ok | `Partial ] *)
-  (* (\** [encode e v] is : *)
-  (*     {ul *)
-  (*     {- [`Partial] iff [e] has a [`Manual] destination and needs *)
-  (*         more output storage. The client must use {!Manual.dst} to provide *)
-  (*         a new buffer and then call {!encode} with [`Await] until [`Ok] *)
-  (*         is returned.} *)
-  (*     {- [`Ok] when the encoder is ready to encode a new [`R] or [`End].}} *)
+  val encode : t -> [< `Await | `End | `Yield of R.t ] -> [ `Ok | `Partial ]
 
-  (*     For [`Manual] destinations, encoding [`End] always returns *)
-  (*     [`Partial], continue with [`Await] until [`Ok] is *)
-  (*     returned at which point [Manual.dst_rem e] is guaranteed to be *)
-  (*     the size of the last provided buffer (i.e. nothing was written). *)
-
-  (*     {b Raises.} [Invalid_argument] if a non well-formed sequence *)
-  (*     of records is encoded or if a [`R] or [`End] is encoded after *)
-  (*     a [`Partial] encode. *\) *)
-
- (** {1 Manual sources and destinations} *)
-
-  (** Manual sources and destinations. *)
   module Manual : sig
-
-    val src : decoder -> Bigstring.t -> int -> unit
-    (** [src d s l] provides [d] with [l] bytes to read in [s]. The
-        decoder knows where it should read the data in, and the former
-        [`Await] tells you where you should write data in. This byte
-        range is read by calls to {!decode} with [d] until [`Await] is
-        returned. To signal the end of input call the function with [l
-        = 0].
-
-        {b Warning.} Do not use with non-[`Manual] decoder sources. *)
-
-    (* val dst : encoder -> Bigstring.t -> int -> int -> unit *)
-    (* (\** [dst e s k l] provides [e] with [l] bytes to write, *)
-    (*     starting at [k] in [s]. This byte range is written by calls *)
-    (*     to {!encoder} with [e] until [`Partial] is returned. *)
-    (*     Use {!dst_rem} to know the remaining number of non-written *)
-    (*     free bytes in [s]. *)
-
-    (*     {b Warning.} Do not use with non-[`Manual] encoder destinations. *)
-    (* *\) *)
-
-    (* val dst_rem : encoder -> int *)
-    (* (\** [dst_rem e] is the remaining number of non-written, *)
-    (*     free bytes in the last buffer provided with {!dst}. *\) *)
+    val dst : t -> Bytes.t -> int -> int -> unit
+    val dst_rem : t -> int
   end
 end
