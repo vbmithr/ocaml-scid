@@ -5,12 +5,11 @@ module H : sig
   (** [size] is the size of the SCID header, in Bytes.t. *)
 
   val check : Bytes.t -> state -> int -> int -> state
-  (** [check ~pos b] is [true] iff there is a valid SCID header in [b]
-      starting at offset [pos]. *)
+  (** [check b st p l] is the new state computed from [st], checking
+      [l] bytes of [b] starting at [p] *)
 
   val write : Bytes.t -> int -> unit
-  (** [write ~pos b] write a valid SCID header in [b] at offset
-      [pos]. *)
+  (** [write b p] write a valid SCID header in [b] at offset [p]. *)
 end
 
 module R : sig

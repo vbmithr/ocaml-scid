@@ -2,5 +2,5 @@ true: debug, bin_annot
 <lib>: include
 <lib_test>: include
 
-<lib/scid.*>: package(core), thread
-<lib_test/*.*>: package(core), package(async), thread
+<lib/scid.*>: package(ocplib-endian), package(core), thread
+<lib_test/*.*>: package(ocplib-endian), package(core), package(async), thread
