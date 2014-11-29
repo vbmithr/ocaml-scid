@@ -7,20 +7,19 @@ let io_buffer_size = 4096
 let main fn =
   Reader.open_file fn >>= fun r ->
   let buf = Bytes.create io_buffer_size in
-  let d = D.make @@ `Manual in
+  let d = D.make `Manual in
   let rec read_forever acc =
     match D.decode d with
     | `Yield r -> read_forever @@ r::acc
-    | `End -> return acc
-    | `Error `Header_invalid -> Printf.eprintf "Invalid header. Aborting.\n";
-      return []
-    | `Error `Bytes_unparsed bs ->
-      Printf.eprintf "Error while parsing: %S not parsed.\n" bs;
-      return acc
+    | `End -> assert false
+    | `Error `Header_invalid s ->
+      Printf.eprintf "Invalid header %S. Aborting.\n" s; return []
+    | `Error `Eof bs ->
+      Printf.eprintf "Premature EOF: %S not parsed.\n" bs; return acc
     | `Await ->
       Reader.read r buf >>= function
       | `Eof -> return acc
-      | `Ok len -> D.Manual.src d buf 0 io_buffer_size; read_forever acc
+      | `Ok len -> D.Manual.refill_bytes d buf 0 len; read_forever acc
   in
   read_forever [] >>= fun recs ->
   Printf.printf "Read %d records.\n%!" (List.length recs);

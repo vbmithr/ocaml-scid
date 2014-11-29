@@ -1,10 +1,8 @@
 module H : sig
-  type state = [ `Checking of int | `Valid | `Invalid ]
-
   val size : int
   (** [size] is the size of the SCID header, in Bytes.t. *)
 
-  val check : Bytes.t -> state -> int -> int -> state
+  val check : Bytes.t -> int -> [ `Ok | `Error of string ]
   (** [check b st p l] is the new state computed from [st], checking
       [l] bytes of [b] starting at [p] *)
 
@@ -43,10 +41,10 @@ end
 (** {1 Decoding} *)
 
 module D : sig
-  type src = [ `Channel of in_channel | `Bytes of Bytes.t | `Manual ]
+  type src = [ `Channel of in_channel | `String of string | `Manual ]
   (** The type for input sources. *)
 
-  type e = [ `Header_invalid | `Bytes_unparsed of Bytes.t ]
+  type e = [ `Header_invalid of string | `Eof of string ]
   (** The type of errors. *)
 
   type t
@@ -58,7 +56,8 @@ module D : sig
   val decode : t -> [ `Yield of R.t | `Await | `End | `Error of e ]
 
   module Manual : sig
-    val src : t -> Bytes.t -> int -> int -> unit
+    val refill_string : t -> string -> int -> int -> unit
+    val refill_bytes : t -> Bytes.t -> int -> int -> unit
   end
 end
 

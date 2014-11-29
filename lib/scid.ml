@@ -1,6 +1,6 @@
-open Core.Std
-
 let io_buffer_size = 4096
+
+module ISet = Set.Make(struct type t = int let compare = Pervasives.compare end)
 
 module H = struct
   type state = [ `Checking of int | `Valid | `Invalid ]
@@ -9,26 +9,19 @@ module H = struct
   let char_valid c = function
     | 0 -> c = 'S' | 1 -> c = 'C' | 2 -> c = 'I' | 3 -> c = 'D'
     | 4 -> c = '8' | 8 -> c = '(' | 12 -> c = '\001'
-    | n when Int.Set.(mem (of_list [5;6;7;9;10;11]) n) -> c = '\000'
+    | n when ISet.(mem n (of_list [5;6;7;9;10;11])) -> c = '\000'
     | _ -> true
 
-  let check b st pos len =
-    let rec inner st c = match st with
-      | `Valid -> `Valid
-      | `Invalid -> `Invalid
-      | `Checking n ->
-        if char_valid c n then
-          if n < 55 then `Checking (n+1) else `Valid
-        else `Invalid in
-    if pos < 0 || len < 0 || pos + len > Bytes.length b
-    then invalid_arg "check"
-    else let st = ref st in
-      for i = pos to pos + len - 1 do
-        st := inner !st b.[i]
-      done; !st
+  let check b pos =
+    try for i = pos to pos + size - 1 do
+        if not @@ char_valid (Bytes.get b i) i
+        then failwith (Printf.sprintf "Char at pos %d should not be %C" i (Bytes.get b i))
+      done; `Ok
+    with Failure s -> `Error s
 
   let write b pos =
-    Bytes.blit "SCID8\000\000\000(\000\000\000\001" 0 b pos 13;
+    if pos + size > Bytes.length b then invalid_arg "bounds";
+    String.blit "SCID8\000\000\000(\000\000\000\001" 0 b pos 13;
     for i = 13 to size - 1 do Bytes.set b i '\000' done
 end
 
@@ -67,10 +60,10 @@ module R = struct
     let h = get_int32 buf (pos+12) |> Int32.float_of_bits in
     let l = get_int32 buf (pos+16) |> Int32.float_of_bits in
     let c = get_int32 buf (pos+20) |> Int32.float_of_bits in
-    let num_trades = get_int32 buf (pos+24) |> Int32.to_int_exn in
-    let total_volume = get_int32 buf (pos+28) |> Int32.to_int_exn in
-    let bid_volume = get_int32 buf (pos+32) |> Int32.to_int_exn in
-    let ask_volume = get_int32 buf (pos+36) |> Int32.to_int_exn in
+    let num_trades = get_int32 buf (pos+24) |> Int32.to_int in
+    let total_volume = get_int32 buf (pos+28) |> Int32.to_int in
+    let bid_volume = get_int32 buf (pos+32) |> Int32.to_int in
+    let ask_volume = get_int32 buf (pos+36) |> Int32.to_int in
     {
       datetime; o; h; l; c; num_trades; total_volume; bid_volume; ask_volume
     }
@@ -82,93 +75,114 @@ module R = struct
     r.h |> Int32.bits_of_float |> set_int32 buf (pos+12);
     r.l |> Int32.bits_of_float |> set_int32 buf (pos+16);
     r.c |> Int32.bits_of_float |> set_int32 buf (pos+20);
-    r.num_trades |> Int32.of_int_exn |> set_int32 buf (pos+24);
-    r.total_volume |> Int32.of_int_exn |> set_int32 buf (pos+28);
-    r.bid_volume |> Int32.of_int_exn |> set_int32 buf (pos+32);
-    r.ask_volume |> Int32.of_int_exn |>set_int32 buf (pos+36)
+    r.num_trades |> Int32.of_int |> set_int32 buf (pos+24);
+    r.total_volume |> Int32.of_int |> set_int32 buf (pos+28);
+    r.bid_volume |> Int32.of_int |> set_int32 buf (pos+32);
+    r.ask_volume |> Int32.of_int |>set_int32 buf (pos+36)
 end
 
 module D = struct
-  type src = [ `Channel of in_channel | `Bytes of Bytes.t | `Manual ]
-  type e = [ `Bytes_unparsed of Bytes.t | `Header_invalid ]
+  type src = [ `Channel of in_channel | `String of string | `Manual ]
+  type e = [ `Eof of string | `Header_invalid of string ]
   type t = {
     src: src;
     partial: Bytes.t;
-    mutable p_partial: int;
-    mutable st: [ `Header of int | `Record of int | `Soi | `Eoi ];
-    mutable buf: bytes;
+    mutable p_pos: int;
+    mutable eoi: bool;
+    mutable st: [ `H | `R ];
+    mutable buf: Bytes.t;
     mutable pos: int;
     mutable max: int;
     mutable k: t -> [ `Yield of R.t | `Await | `End | `Error of e ];
   }
 
-  let new_st st n = match st with
-    | `Soi -> if n < H.size then `Header n else `Record ((n - H.size) mod R.size)
-    | `Header i -> if i + n < 55 then `Header (i+n) else `Record ((i + n - H.size) mod R.size)
-    | `Record i -> `Record ((i + n) mod R.size)
-    | `Eoi -> `Eoi
-
-  let eoi d = d.buf <- ""; d.pos <- Int.max_value; d.max <- 0; d.st <- `Eoi
+  let eoi d =
+    d.buf <- Bytes.create 0; d.pos <- max_int; d.max <- 0; d.eoi <- true
   module Manual = struct
-    let src d b p l =
+    let refill_string d b p l =
+      if p < 0 || l < 0 || p + l > String.length b then invalid_arg "bounds";
+      if l = 0 then eoi d else
+        d.buf <- Bytes.unsafe_of_string b; d.pos <- p ; d.max <- p + l - 1
+    let refill_bytes d b p l =
       if p < 0 || l < 0 || p + l > Bytes.length b then invalid_arg "bounds";
-      if l = 0 then eoi d
-      else d.buf <- b; d.pos <- p ; d.max <- p + l - 1
+      if l = 0 then eoi d else d.buf <- b; d.pos <- p ; d.max <- p + l - 1
   end
 
   let refill k d =
-    assert (d.pos > d.max);
     match d.src with
-    | `Bytes _ -> eoi d; k d
+    | `String _ -> eoi d; k d
     | `Manual -> d.k <- k; `Await
     | `Channel ic ->
       let rc = input ic d.buf 0 (Bytes.length d.buf) in
-      Manual.src d d.buf 0 rc; k d
-
-  let rec check_header k d =
-    let check n =
-      match H.(check d.buf (`Checking n) d.pos n) with
-      | `Invalid -> d.st <- new_st d.st n; d.pos <- d.pos + n; `Error `Header_invalid
-      | `Valid -> d.st <- new_st d.st n; d.pos <- d.pos + n; k d
-      | `Checking n ->
-        d.pos <- d.pos + n;
-        if d.src <> `Manual then
-          if d.st = `Header 0 then `End else `Error `Header_invalid
-        else (d.st <- new_st d.st n; `Await) in
-    let can_read = d.max - d.pos + 1 in
-    if can_read < 1 then refill (check_header k) d else check can_read
+      Manual.refill_bytes d d.buf 0 rc; k d
 
   let rec r_record k d =
-    match d.st with
-    | `Record n ->
-      if n = R.size && d.max - d.pos + 1 >= R.size then begin
-        d.pos <- d.pos + R.size;
-        `Yield (R.read d.buf d.pos)
-      end
-      else begin
-        let can_write = min n (d.max - d.pos + 1) in
-        Bytes.blit d.buf d.pos d.partial n can_write;
-        if can_write = n then
-          (d.st <- `Record 0; `Yield (R.read d.partial 0))
-        else
-          (d.st <- `Record (n - can_write);
-           refill (r_record k) d)
-      end
-    | `Soi | `Header _ -> check_header (r_record k) d
-    | `Eoi when d.p_partial <> 0 ->
-      `Error (`Bytes_unparsed (Bytes.sub d.partial 0 d.p_partial))
-    | `Eoi -> `End
+    if d.eoi then
+      match d.st with
+      | `H when d.p_pos = 0 -> `End
+      | `R when d.p_pos = 0 -> `End
+      | _ ->
+        let l = d.p_pos in
+        d.p_pos <- 0;
+        `Error (`Eof Bytes.(sub d.partial 0 l |> unsafe_to_string))
+    else if d.pos > d.max then refill (r_record k) d
+    else
+      let can_read = d.max - d.pos + 1 in
+      match d.st with
+      | `H when d.p_pos = 0 ->
+        if can_read >= H.size then match H.check d.buf d.pos with
+          | `Ok -> d.pos <- d.pos + H.size; d.st <- `R; r_record k d
+          | `Error _ ->
+            let ret = `Error (`Header_invalid Bytes.(sub d.buf d.pos H.size |> unsafe_to_string)) in
+            d.pos <- d.pos + H.size; ret
+        else begin
+          Bytes.blit d.buf 0 d.partial 0 can_read;
+          d.p_pos <- d.p_pos + can_read;
+          d.pos <- d.pos + can_read;
+          r_record k d end
+      | `H ->
+        let rest = min (can_read) (H.size - d.p_pos) in
+        Bytes.blit d.buf d.pos d.partial d.p_pos rest;
+        d.p_pos <- d.p_pos + rest;
+        d.pos <- d.pos + rest;
+        if d.p_pos < H.size then r_record k d
+        else begin
+          d.st <- `R;
+          d.p_pos <- 0;
+          match H.check d.partial 0 with
+          | `Ok -> r_record k d
+          | `Error _ -> `Error (`Header_invalid Bytes.(copy d.partial |> unsafe_to_string))
+        end
+      | `R when d.p_pos = 0 ->
+        if can_read >= R.size
+        then (let pos = d.pos in d.pos <- d.pos + R.size; `Yield (R.read d.buf pos))
+        else begin
+          Bytes.blit d.buf 0 d.partial 0 can_read;
+          d.p_pos <- d.p_pos + can_read;
+          d.pos <- d.pos + can_read;
+          r_record k d end
+      | `R ->
+        let rest = min (can_read) (R.size - d.p_pos) in
+        Bytes.blit d.buf d.pos d.partial d.p_pos rest;
+        d.p_pos <- d.p_pos + rest;
+        d.pos <- d.pos + rest;
+        if d.p_pos < R.size then r_record k d
+        else begin
+          d.st <- `R;
+          d.p_pos <- 0;
+          `Yield (R.read d.partial 0)
+        end
 
   let rec ret d result = d.k <- r_record ret; result
   let make src =
     let buf, pos, max = match src with
-      | `Channel _ -> Bytes.create io_buffer_size, 0, 0
-      | `Bytes b -> b, 0, Bytes.length b - 1
-      | `Manual -> "", Int.max_value, 0
+      | `Manual -> Bytes.create 0, max_int, 0
+      | `Channel _ -> Bytes.create io_buffer_size, max_int, 0
+      | `String s -> Bytes.unsafe_of_string s, 0, String.length s - 1
     in
-    { src = (src :> src);
-      partial = Bytes.create H.size; p_partial = 0;
-      st = `Header 0; buf; pos; max;
+    { src = (src :> src); eoi = false;
+      partial = Bytes.create H.size; p_pos = 0;
+      st = `H; buf; pos; max;
       k = r_record ret
     }
 
@@ -194,7 +208,7 @@ module E = struct
 
   let flush k e = match e.dst with
   | `Manual -> e.k <- partial k; `Partial
-  | `Buffer b -> Buffer.add_substring b e.buf 0 e.pos; e.pos <- 0; k e
+  | `Buffer b -> Buffer.add_subbytes b e.buf 0 e.pos; e.pos <- 0; k e
   | `Channel oc -> output oc e.buf 0 e.pos; e.pos <- 0; k e
 
   let rec _encode k e v = match v with
@@ -230,7 +244,7 @@ module E = struct
   let rec ret e = e.k <- _encode ret; `Ok
   let make dst =
     let buf, pos, max = match dst with
-      | `Manual -> "", Int.max_value, 0
+      | `Manual -> Bytes.create 0, max_int, 0
       | `Channel _ | `Buffer _ -> Bytes.create io_buffer_size, 0, io_buffer_size - 1
     in
     { dst = (dst :> dst); buf; pos; max; partial = Bytes.create H.size;

@@ -6,3 +6,4 @@ B _build/lib_test
 PKG core
 PKG async
 PKG ocplib-endian
+PKG containers
