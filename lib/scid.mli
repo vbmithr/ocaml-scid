@@ -1,13 +1,18 @@
 module H : sig
+  val valid : string
+  (** A valid SCID header. *)
+
   val size : int
   (** [size] is the size of the SCID header, in Bytes.t. *)
 
   val check : Bytes.t -> int -> [ `Ok | `Error of string ]
-  (** [check b st p l] is the new state computed from [st], checking
-      [l] bytes of [b] starting at [p] *)
+  (** [check b p] is the [`Ok] if [b] contains a valid header starting
+      at position [p], and [`Error] otherwise *)
 
-  val write : Bytes.t -> int -> unit
-  (** [write b p] write a valid SCID header in [b] at offset [p]. *)
+  val write : ?start:int -> ?len:int -> Bytes.t -> int -> unit
+  (** [write ~start ~len b p] write a portion of a valid SCID header
+      starting from offset [start], of length [len], to [b] at offset
+      [p]. *)
 end
 
 module R : sig
@@ -53,7 +58,7 @@ module D : sig
   val make : [< src] -> t
   (** [decoder src] is a decoder that inputs from src. *)
 
-  val decode : t -> [ `Yield of R.t | `Await | `End | `Error of e ]
+  val decode : t -> [ `R of R.t | `Await | `End | `Error of e ]
 
   module Manual : sig
     val refill_string : t -> string -> int -> int -> unit
@@ -73,10 +78,11 @@ module E : sig
   val make : [< dst] -> t
   (** [encoder dst] is an encoder that outputs to [dst]. *)
 
-  val encode : t -> [< `Await | `End | `Yield of R.t ] -> [ `Ok | `Partial ]
+  val encode : t -> [< `Await | `End | `R of R.t ] -> [ `Ok | `Partial ]
 
   module Manual : sig
-    val dst : t -> Bytes.t -> int -> int -> unit
-    val dst_rem : t -> int
+    val add_string : t -> string -> int -> int -> unit
+    val add_bytes : t -> Bytes.t -> int -> int -> unit
+    val rem : t -> int
   end
 end

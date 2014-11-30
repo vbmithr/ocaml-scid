@@ -3,14 +3,13 @@ open Scid
 
 let r = String.make R.size '\001'
 
-
 type ret =
   [ `Await
   | `End
   | `Error of
       [ `Eof of String.t
       | `Header_invalid of String.t ]
-  | `Yield of R.t ]
+  | `R of R.t ]
 
 let buf0 = String.make 0 '\000'
 let buf3 = String.make 3 '\000'
@@ -31,14 +30,14 @@ let h_plus_incompleteb = String.sub h_plus_1b 0 90
 
 let printer = function
   | `End -> "End"
-  | `Yield r -> "Yield"
+  | `R r -> "Yield"
   | `Error (`Header_invalid hdr)-> Printf.sprintf "Header_invalid %S" hdr
   | `Error (`Eof s) -> Printf.sprintf "Eof %S" s
   | `Await -> "Await"
 
 let cmp a b = match a, b with
   | `End, `End -> true
-  | `Yield _, `Yield _ -> true
+  | `R _, `R _ -> true
   | `Error `Header_invalid _, `Error `Header_invalid _ -> true
   | `Error (`Eof _), `Error (`Eof _) -> true
   | `Await, `Await -> true
@@ -161,28 +160,71 @@ let incomplete_r_nb ctx =
 let complete_2b_manual ctx =
   let d = D.make `Manual in
   D.Manual.refill_string d h_plus_2b 0 (String.length h_plus_2b);
-  assert_equal ~msg:"first" ~printer ~cmp (`Yield R.empty) (D.decode d);
-  assert_equal ~msg:"second" ~printer ~cmp (`Yield R.empty) (D.decode d)
+  assert_equal ~msg:"first" ~printer ~cmp (`R R.empty) (D.decode d);
+  assert_equal ~msg:"second" ~printer ~cmp (`R R.empty) (D.decode d)
+
+let decode_small_buf ctx =
+  let d = D.make `Manual in
+  let b = Bytes.create 1 in
+  for i = 0 to H.size + R.size - 1 do
+    Bytes.set b 0 H.valid.[i mod H.size];
+    D.Manual.refill_bytes d b 0 1;
+    if i < H.size + R.size - 1
+    then assert_equal ~msg:"intermediate decode" `Await (D.decode d)
+    else assert_equal ~msg:"last_decode" ~cmp (`R R.empty) (D.decode d)
+  done
 
 let printer = function
   | `Ok -> "Ok"
   | `Partial -> "Partial"
 
+let encode_empty ctx =
+  let b = Bytes.create 0 in
+  let e = E.make `Manual in
+  assert_equal ~msg:"before adding bytes" `Partial (E.encode e @@ `R R.empty);
+  E.Manual.add_bytes e b 0 0;
+  assert_equal ~msg:"after adding empty buf" `Partial (E.encode e `Await);
+  assert_equal ~msg:"after adding empty buf, second await" `Partial (E.encode e `Await);
+  E.Manual.add_string e h_plus_2b 0 (String.length h_plus_2b);
+  assert_equal ~msg:"first rem" (String.length h_plus_2b) (E.Manual.rem e);
+  assert_equal ~msg:"after adding real buf" `Ok (E.encode e `Await);
+  assert_equal R.size (E.Manual.rem e);
+  assert_equal ~msg:"after encoding End" `Partial (E.encode e `End);
+  assert_equal ~msg:"after final Await" `Ok (E.encode e `Await);
+  assert_equal ~msg:"second rem" (String.length h_plus_2b) (E.Manual.rem e)
+
+let encode_small_buf ctx =
+  let b = Bytes.create 1 in
+  let e = E.make `Manual in
+  assert_equal ~msg:"before adding bytes" `Partial (E.encode e @@ `R R.empty);
+  for i = 0 to H.size + R.size - 1 do
+    E.Manual.add_bytes e b 0 1;
+    if i < H.size + R.size - 1
+    then assert_equal ~msg:(Printf.sprintf "loop %d" i) `Partial (E.encode e `Await)
+    else assert_equal ~msg:(Printf.sprintf "loop %d" i) `Ok (E.encode e `Await)
+  done;
+  assert_equal ~msg:"loop final" `Ok (E.encode e `Await);
+  assert_equal ~msg:"loop final" `Ok (E.encode e `Await)
+
 let decode_recode_2b_manual ctx =
-  let b = String.make (2 * R.size) '\000' in
+  let b = String.make (String.length h_plus_2b) '\000' in
   let d = D.make `Manual in
   D.Manual.refill_string d h_plus_2b 0 (String.length h_plus_2b);
-  let r1 = match D.decode d with `Yield r -> r | _ -> assert false in
-  let r2 = match D.decode d with `Yield r -> r | _ -> assert false in
+  let r1 = match D.decode d with `R r -> r | _ -> assert false in
+  let r2 = match D.decode d with `R r -> r | _ -> assert false in
   let e = E.make `Manual in
-  E.Manual.dst e b 0 (String.length b);
-  assert_equal ~msg:"encode r1" ~printer `Ok (E.encode e @@ `Yield r1);
-  assert_equal ~msg:"encode r2" ~printer `Ok (E.encode e @@ `Yield r2);
+  E.Manual.add_string e b 0 (String.length b);
+  assert_equal ~msg:"encode r1" ~printer `Ok (E.encode e @@ `R r1);
+  assert_equal R.size (E.Manual.rem e);
+  assert_equal ~msg:"encode r2" ~printer `Ok (E.encode e @@ `R r2);
+  assert_equal 0 (E.Manual.rem e);
+  assert_equal b h_plus_2b;
   assert_equal ~msg:"encode End" ~printer `Partial (E.encode e `End);
-  assert_equal ~msg:"flush" ~printer `Ok (E.encode e `Await)
+  assert_equal ~msg:"flush" ~printer `Ok (E.encode e `Await);
+  assert_equal ~msg:"flush2" ~printer `Ok (E.encode e `Await)
 
 let suite =
-  "decode" >:::
+  "scid" >:::
 
   [
     "decode_recode" >:: decode_recode;
@@ -204,8 +246,11 @@ let suite =
     "invalid_hdr_manual" >:: invalid_hdr_manual;
     "incomplete_r_nb" >:: incomplete_r_nb;
     "complete_2b_manual" >:: complete_2b_manual;
+    "decode_small_buf" >:: decode_small_buf;
 
-    (* "decode_recode_2b_manual" >:: decode_recode_2b_manual; *)
+    "encode_small_buf" >:: encode_small_buf;
+    "encode_empty" >:: encode_empty;
+    "decode_recode_2b_manual" >:: decode_recode_2b_manual;
   ]
 
 let () = run_test_tt_main suite

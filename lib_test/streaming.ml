@@ -9,7 +9,7 @@ let () =
   let d = D.make `Manual in
   let rec decode acc =
     match D.decode d with
-    | `Yield r -> decode @@ r::acc
+    | `R r -> decode @@ r::acc
     | `End -> assert false
     | `Error `Header_invalid s -> Printf.eprintf "Invalid header %S. aborting.\n" s; exit 1
     | `Error `Eof s -> Printf.eprintf "Premature EOF: %S not parsed.\n" s; exit 1

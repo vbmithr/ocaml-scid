@@ -6,6 +6,13 @@ module H = struct
   type state = [ `Checking of int | `Valid | `Invalid ]
   let size = 56
 
+  let init = function
+    | 0 -> 'S' | 1 -> 'C' | 2 -> 'I' | 3 -> 'D'
+    | 4 -> '8' | 8 -> '(' | 12 -> '\001'
+    | _ -> '\000'
+
+  let valid = String.init size init
+
   let char_valid c = function
     | 0 -> c = 'S' | 1 -> c = 'C' | 2 -> c = 'I' | 3 -> c = 'D'
     | 4 -> c = '8' | 8 -> c = '(' | 12 -> c = '\001'
@@ -14,15 +21,14 @@ module H = struct
 
   let check b pos =
     try for i = pos to pos + size - 1 do
-        if not @@ char_valid (Bytes.get b i) i
+        if not @@ char_valid (Bytes.get b i) (i-pos)
         then failwith (Printf.sprintf "Char at pos %d should not be %C" i (Bytes.get b i))
       done; `Ok
     with Failure s -> `Error s
 
-  let write b pos =
-    if pos + size > Bytes.length b then invalid_arg "bounds";
-    String.blit "SCID8\000\000\000(\000\000\000\001" 0 b pos 13;
-    for i = 13 to size - 1 do Bytes.set b i '\000' done
+  let write ?(start=0) ?(len=size) b pos =
+    if pos + len > Bytes.length b then invalid_arg "bounds";
+    String.blit valid start b pos len
 end
 
 module R = struct
@@ -93,7 +99,7 @@ module D = struct
     mutable buf: Bytes.t;
     mutable pos: int;
     mutable max: int;
-    mutable k: t -> [ `Yield of R.t | `Await | `End | `Error of e ];
+    mutable k: t -> [ `R of R.t | `Await | `End | `Error of e ];
   }
 
   let eoi d =
@@ -115,6 +121,14 @@ module D = struct
     | `Channel ic ->
       let rc = input ic d.buf 0 (Bytes.length d.buf) in
       Manual.refill_bytes d d.buf 0 rc; k d
+
+  (* let rec r_header k d = *)
+  (*   let can_read = d.max - d.pos + 1 in *)
+  (*   assert (d.st = `H); *)
+  (*   if d.p_pos = 0 && can_read >= H.size *)
+  (*   then *)
+  (*     match H.check d.buf d.pos with *)
+  (*     | `Ok -> d.pos <- d.pos + *)
 
   let rec r_record k d =
     if d.eoi then
@@ -155,7 +169,7 @@ module D = struct
         end
       | `R when d.p_pos = 0 ->
         if can_read >= R.size
-        then (let pos = d.pos in d.pos <- d.pos + R.size; `Yield (R.read d.buf pos))
+        then (let pos = d.pos in d.pos <- d.pos + R.size; `R (R.read d.buf pos))
         else begin
           Bytes.blit d.buf 0 d.partial 0 can_read;
           d.p_pos <- d.p_pos + can_read;
@@ -170,14 +184,14 @@ module D = struct
         else begin
           d.st <- `R;
           d.p_pos <- 0;
-          `Yield (R.read d.partial 0)
+          `R (R.read d.partial 0)
         end
 
   let rec ret d result = d.k <- r_record ret; result
   let make src =
     let buf, pos, max = match src with
-      | `Manual -> Bytes.create 0, max_int, 0
-      | `Channel _ -> Bytes.create io_buffer_size, max_int, 0
+      | `Manual -> Bytes.create 0, 1, 0
+      | `Channel _ -> Bytes.create io_buffer_size, 1, 0
       | `String s -> Bytes.unsafe_of_string s, 0, String.length s - 1
     in
     { src = (src :> src); eoi = false;
@@ -193,70 +207,83 @@ end
 
 module E = struct
   type dst = [ `Channel of out_channel | `Buffer of Buffer.t | `Manual ]
-  type encode = [ `Await | `End | `Yield of R.t]
+  type encode = [ `Await | `End | `R of R.t]
   type t = {
     dst: dst;
     partial: Bytes.t;
-    mutable st: [ `Header of int | `Record of int ];
+    mutable p_pos: int;
+    mutable st: [ `H | `R ];
     mutable buf : Bytes.t;
     mutable pos : int;
     mutable max : int;
     mutable k : t -> encode -> [ `Ok | `Partial ] }
 
-  let partial k e = function `Await -> k e
-  | `Yield _ | `End -> invalid_arg "cannot encode now, use `Await first"
+  module Manual = struct
+    let add_bytes e buf pos max =
+      if pos < 0 || max < 0 || pos + max > Bytes.length buf then invalid_arg "bounds"
+      else e.buf <- buf; e.pos <- pos; e.max <- pos + max - 1
+    let add_string e buf pos max =
+      if pos < 0 || max < 0 || pos + max > String.length buf then invalid_arg "bounds"
+      else e.buf <- Bytes.unsafe_of_string buf; e.pos <- pos; e.max <- pos + max - 1
+
+    let rem e = e.max - e.pos + 1
+  end
+
+  let partial k e = function
+    | `Await -> k e
+    | `R _ | `End -> invalid_arg "cannot encode now, use `Await first"
 
   let flush k e = match e.dst with
-  | `Manual -> e.k <- partial k; `Partial
-  | `Buffer b -> Buffer.add_subbytes b e.buf 0 e.pos; e.pos <- 0; k e
-  | `Channel oc -> output oc e.buf 0 e.pos; e.pos <- 0; k e
+    | `Manual -> e.k <- partial k; `Partial
+    | `Buffer b -> Buffer.add_subbytes b e.buf 0 e.pos; e.pos <- 0; k e
+    | `Channel oc -> output oc e.buf 0 e.pos; e.pos <- 0; k e
+
+  let rec encode_h k e =
+    let can_write = e.max - e.pos + 1 in
+    if can_write < 1 then flush (encode_h k) e
+    else begin
+      assert (e.st <> `R);
+      if e.p_pos = 0 && can_write >= H.size
+      then (H.write e.buf e.pos; e.pos <- e.pos + H.size; e.st <- `R; k e)
+      else
+        let len = min can_write (H.size - e.p_pos) in
+        H.write e.buf e.pos ~start:e.p_pos ~len;
+        e.pos <- e.pos + len;
+        e.p_pos <- (e.p_pos + len) mod H.size;
+        if e.p_pos = 0 then (e.st <- `R; k e) else (encode_h k e)
+    end
+
+  let rec encode_r k r e =
+    let can_write = e.max - e.pos + 1 in
+    if can_write < 1 then flush (encode_r k r) e
+    else begin
+      assert (e.st = `R);
+      if e.p_pos = 0 && can_write >= R.size
+      then (R.write r e.buf e.pos; e.pos <- e.pos + R.size; k e)
+      else
+        let len = min can_write (R.size - e.p_pos) in
+        if e.p_pos = 0 then R.write r e.partial 0;
+        Bytes.blit e.partial e.p_pos e.buf e.pos len;
+        e.pos <- e.pos + len;
+        e.p_pos <- (e.p_pos + len) mod R.size;
+        if e.p_pos = 0 then (k e) else (encode_r k r e)
+    end
 
   let rec _encode k e v = match v with
+    | `End -> e.pos <- 0; e.max <- Bytes.length e.buf - 1; flush k e
     | `Await -> k e
-    | `End -> flush k e
-    | `Yield r -> match e.st with
-      | `Header n ->
-        if e.max - e.pos + 1 >= H.size
-        then (H.write e.buf e.pos; e.pos <- e.pos + H.size;
-              e.st <- `Record 0; _encode k e v)
-        else
-          begin
-            H.write e.partial 0;
-            let can_write = e.max - e.pos + 1 in
-            Bytes.blit e.partial 0 e.buf e.pos can_write;
-            e.max <- e.max + can_write;
-            e.st <- `Header (n + can_write);
-            flush (fun e -> _encode k e v) e
-          end
-      | `Record n ->
-        if e.max - e.pos + 1 >= R.size
-        then (R.write r e.buf e.pos; e.pos <- e.pos + R.size; k e)
-        else
-          begin
-            R.write r e.partial 0;
-            let can_write = e.max - e.pos + 1 in
-            Bytes.blit e.partial 0 e.buf e.pos can_write;
-            e.max <- e.max + can_write;
-            e.st <- `Record (n + can_write);
-            flush (fun e -> _encode k e v) e
-          end
+    | `R r ->
+      if e.st = `H then encode_h (encode_r k r) e
+      else encode_r k r e
 
   let rec ret e = e.k <- _encode ret; `Ok
   let make dst =
     let buf, pos, max = match dst with
-      | `Manual -> Bytes.create 0, max_int, 0
+      | `Manual -> Bytes.create 0, 1, 0
       | `Channel _ | `Buffer _ -> Bytes.create io_buffer_size, 0, io_buffer_size - 1
     in
-    { dst = (dst :> dst); buf; pos; max; partial = Bytes.create H.size;
-      st = `Header 0; k = _encode ret }
+    { dst = (dst :> dst); buf; pos; max; partial = Bytes.create H.size; p_pos = 0;
+      st = `H; k = _encode ret }
 
   let encode e v = e.k e (v :> encode)
-
-  module Manual = struct
-    let dst e buf pos max =
-      if pos < 0 || max < 0 || pos + max > Bytes.length buf then invalid_arg "bounds"
-      else e.buf <- buf; e.pos <- pos; e.max <- pos + max - 1
-
-    let dst_rem e = e.max - e.pos + 1
-  end
 end
