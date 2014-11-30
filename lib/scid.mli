@@ -22,10 +22,10 @@ module R : sig
     h : float;
     l : float;
     c : float;
-    num_trades : int;
-    total_volume : int;
-    bid_volume : int;
-    ask_volume : int;
+    num_trades : int64;
+    total_volume : int64;
+    bid_volume : int64;
+    ask_volume : int64;
   }
   (** SierraChart's s_IntradayRecord *)
 

@@ -38,16 +38,16 @@ module R = struct
     h: float;
     l: float;
     c: float;
-    num_trades: int;
-    total_volume: int;
-    bid_volume: int;
-    ask_volume: int
+    num_trades: int64;
+    total_volume: int64;
+    bid_volume: int64;
+    ask_volume: int64;
   }
 
   let empty =
     { datetime = 0.; o = 0.; h = 0.; l = 0.; c = 0.;
-      num_trades = 0; total_volume = 0; bid_volume = 0;
-      ask_volume = 0;
+      num_trades = 0L; total_volume = 0L; bid_volume = 0L;
+      ask_volume = 0L;
     }
 
   let size = 40
@@ -59,32 +59,39 @@ module R = struct
   let unix_time_of_sc_time v = (v -. 25571.) *. 86400.
   let sc_time_of_unix_time v = v /. 86400. +. 25571.
 
+  let tmpbuf = Bytes.make 8 '\000'
   let read buf pos =
     let open EndianBytes.LittleEndian in
+    let get_uint32 b p =
+      Bytes.blit b p tmpbuf 0 4;
+      get_int64 tmpbuf 0 in
     let datetime = get_int64 buf pos |> Int64.float_of_bits in
     let o = get_int32 buf (pos+8) |> Int32.float_of_bits in
     let h = get_int32 buf (pos+12) |> Int32.float_of_bits in
     let l = get_int32 buf (pos+16) |> Int32.float_of_bits in
     let c = get_int32 buf (pos+20) |> Int32.float_of_bits in
-    let num_trades = get_int32 buf (pos+24) |> Int32.to_int in
-    let total_volume = get_int32 buf (pos+28) |> Int32.to_int in
-    let bid_volume = get_int32 buf (pos+32) |> Int32.to_int in
-    let ask_volume = get_int32 buf (pos+36) |> Int32.to_int in
+    let num_trades = get_uint32 buf (pos+24) in
+    let total_volume = get_uint32 buf (pos+28) in
+    let bid_volume = get_uint32 buf (pos+32) in
+    let ask_volume = get_uint32 buf (pos+36) in
     {
       datetime; o; h; l; c; num_trades; total_volume; bid_volume; ask_volume
     }
 
   let write r buf pos =
     let open EndianBytes.LittleEndian in
+    let set_int64_uint32 b p i =
+      set_int64 tmpbuf 0 i;
+      Bytes.blit tmpbuf 0 b p 4 in
     r.datetime |> Int64.bits_of_float |> set_int64 buf pos;
     r.o |> Int32.bits_of_float |> set_int32 buf (pos+8);
     r.h |> Int32.bits_of_float |> set_int32 buf (pos+12);
     r.l |> Int32.bits_of_float |> set_int32 buf (pos+16);
     r.c |> Int32.bits_of_float |> set_int32 buf (pos+20);
-    r.num_trades |> Int32.of_int |> set_int32 buf (pos+24);
-    r.total_volume |> Int32.of_int |> set_int32 buf (pos+28);
-    r.bid_volume |> Int32.of_int |> set_int32 buf (pos+32);
-    r.ask_volume |> Int32.of_int |>set_int32 buf (pos+36)
+    r.num_trades |> set_int64_uint32 buf (pos+24);
+    r.total_volume |> set_int64_uint32 buf (pos+28);
+    r.bid_volume |> set_int64_uint32 buf (pos+32);
+    r.ask_volume |> set_int64_uint32 buf (pos+36)
 end
 
 module D = struct
