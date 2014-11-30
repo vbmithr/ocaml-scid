@@ -122,15 +122,38 @@ module D = struct
       let rc = input ic d.buf 0 (Bytes.length d.buf) in
       Manual.refill_bytes d d.buf 0 rc; k d
 
-  (* let rec r_header k d = *)
-  (*   let can_read = d.max - d.pos + 1 in *)
-  (*   assert (d.st = `H); *)
-  (*   if d.p_pos = 0 && can_read >= H.size *)
-  (*   then *)
-  (*     match H.check d.buf d.pos with *)
-  (*     | `Ok -> d.pos <- d.pos + *)
+  let rec r_header k d =
+    let can_read = d.max - d.pos + 1 in
+    assert (d.st = `H);
+    if d.p_pos = 0 && can_read >= H.size then
+      let pos = d.pos in d.pos <- d.pos + H.size; d.st <- `R;
+      match H.check d.buf pos with
+      | `Ok -> _decode k d
+      | `Error _ -> k d @@ `Error (`Header_invalid Bytes.(sub d.buf pos H.size |> unsafe_to_string))
+    else
+      let len = min can_read (H.size - d.p_pos) in
+      Bytes.blit d.buf d.pos d.partial d.p_pos len;
+      d.pos <- d.pos + len;
+      d.p_pos <- (d.p_pos + len) mod H.size;
+      if d.p_pos = 0 then begin d.st <- `R;
+        match H.check d.partial 0 with
+        | `Ok -> _decode k d
+        | `Error _ -> k d @@ `Error (`Header_invalid Bytes.(sub d.partial 0 H.size |> unsafe_to_string)) end
+      else _decode k d
 
-  let rec r_record k d =
+  and r_record k d =
+    let can_read = d.max - d.pos + 1 in
+    assert (d.st = `R);
+    if d.pos = 0 && can_read >= R.size then
+      let pos = d.pos in d.pos <- d.pos + R.size; k d (`R (R.read d.buf pos))
+    else
+      let len = min can_read (R.size - d.p_pos) in
+      Bytes.blit d.buf d.pos d.partial d.p_pos len;
+      d.pos <- d.pos + len;
+      d.p_pos <- (d.p_pos + len) mod R.size;
+      if d.p_pos = 0 then k d (`R (R.read d.partial 0)) else _decode k d
+
+  and _decode k d =
     if d.eoi then
       match d.st with
       | `H when d.p_pos = 0 -> `End
@@ -139,55 +162,11 @@ module D = struct
         let l = d.p_pos in
         d.p_pos <- 0;
         `Error (`Eof Bytes.(sub d.partial 0 l |> unsafe_to_string))
-    else if d.pos > d.max then refill (r_record k) d
-    else
-      let can_read = d.max - d.pos + 1 in
-      match d.st with
-      | `H when d.p_pos = 0 ->
-        if can_read >= H.size then match H.check d.buf d.pos with
-          | `Ok -> d.pos <- d.pos + H.size; d.st <- `R; r_record k d
-          | `Error _ ->
-            let ret = `Error (`Header_invalid Bytes.(sub d.buf d.pos H.size |> unsafe_to_string)) in
-            d.pos <- d.pos + H.size; ret
-        else begin
-          Bytes.blit d.buf 0 d.partial 0 can_read;
-          d.p_pos <- d.p_pos + can_read;
-          d.pos <- d.pos + can_read;
-          r_record k d end
-      | `H ->
-        let rest = min (can_read) (H.size - d.p_pos) in
-        Bytes.blit d.buf d.pos d.partial d.p_pos rest;
-        d.p_pos <- d.p_pos + rest;
-        d.pos <- d.pos + rest;
-        if d.p_pos < H.size then r_record k d
-        else begin
-          d.st <- `R;
-          d.p_pos <- 0;
-          match H.check d.partial 0 with
-          | `Ok -> r_record k d
-          | `Error _ -> `Error (`Header_invalid Bytes.(copy d.partial |> unsafe_to_string))
-        end
-      | `R when d.p_pos = 0 ->
-        if can_read >= R.size
-        then (let pos = d.pos in d.pos <- d.pos + R.size; `R (R.read d.buf pos))
-        else begin
-          Bytes.blit d.buf 0 d.partial 0 can_read;
-          d.p_pos <- d.p_pos + can_read;
-          d.pos <- d.pos + can_read;
-          r_record k d end
-      | `R ->
-        let rest = min (can_read) (R.size - d.p_pos) in
-        Bytes.blit d.buf d.pos d.partial d.p_pos rest;
-        d.p_pos <- d.p_pos + rest;
-        d.pos <- d.pos + rest;
-        if d.p_pos < R.size then r_record k d
-        else begin
-          d.st <- `R;
-          d.p_pos <- 0;
-          `R (R.read d.partial 0)
-        end
+    else if d.max - d.pos + 1 < 1 then refill (_decode k) d
+    else if d.st = `H then r_header k d
+    else r_record k d
 
-  let rec ret d result = d.k <- r_record ret; result
+  let rec ret d result = d.k <- _decode ret; result
   let make src =
     let buf, pos, max = match src with
       | `Manual -> Bytes.create 0, 1, 0
@@ -197,7 +176,7 @@ module D = struct
     { src = (src :> src); eoi = false;
       partial = Bytes.create H.size; p_pos = 0;
       st = `H; buf; pos; max;
-      k = r_record ret
+      k = _decode ret
     }
 
   let decode d = d.k d

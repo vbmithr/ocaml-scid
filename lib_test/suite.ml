@@ -30,7 +30,7 @@ let h_plus_incompleteb = String.sub h_plus_1b 0 90
 
 let printer = function
   | `End -> "End"
-  | `R r -> "Yield"
+  | `R r -> "R"
   | `Error (`Header_invalid hdr)-> Printf.sprintf "Header_invalid %S" hdr
   | `Error (`Eof s) -> Printf.sprintf "Eof %S" s
   | `Await -> "Await"
@@ -145,10 +145,7 @@ let incomplete_hdr_manual ctx =
 let invalid_hdr_manual ctx =
   let d = D.make `Manual in
   D.Manual.refill_string d bad_hdr 0 H.size;
-  assert_equal ~printer (`Error (`Header_invalid bad_hdr)) (D.decode d);
-  assert_equal ~printer `Await (D.decode d);
-  D.Manual.refill_string d bad_hdr 0 H.size;
-  assert_equal ~printer (`Error (`Header_invalid bad_hdr)) (D.decode d);
+  assert_equal ~msg:"first" ~printer (`Error (`Header_invalid bad_hdr)) (D.decode d);
   assert_equal ~printer `Await (D.decode d)
 
 let incomplete_r_nb ctx =
