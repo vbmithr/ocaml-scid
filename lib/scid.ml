@@ -159,8 +159,7 @@ module D = struct
 
   and r_record k d =
     let can_read = d.max - d.pos + 1 in
-    assert (d.st = `R);
-    if d.pos = 0 && can_read >= R.size then
+    if d.p_pos = 0 && can_read >= R.size then
       let pos = d.pos in d.pos <- d.pos + R.size; k d (`R (R.read d.buf pos))
     else
       let len = min can_read (R.size - d.p_pos) in

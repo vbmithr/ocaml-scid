@@ -1,4 +1,3 @@
-open Core.Std
 open Scid
 
 let io_buffer_size = 4096

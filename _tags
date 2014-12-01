@@ -4,4 +4,5 @@ true: debug, bin_annot
 
 <lib/scid.*>: safe_string, package(ocplib-endian), package(ppx_deriving.std)
 <lib_test/suite.*>: package(ocplib-endian), package(oUnit)
-<lib_test/{copy,streaming}.*>: package(ocplib-endian), package(core), package(async), thread
+<lib_test/copy.*>: package(ocplib-endian), package(core), package(async), thread
+<lib_test/{streaming,test_decoder}.*>: package(ocplib-endian), package(bigarray)

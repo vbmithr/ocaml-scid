@@ -9,4 +9,5 @@ let () =
     Pkg.bin ~auto:true "lib_test/suite";
     Pkg.bin ~auto:true "lib_test/copy";
     Pkg.bin ~auto:true "lib_test/streaming";
+    Pkg.bin ~auto:true "lib_test/test_decoder";
   ]
