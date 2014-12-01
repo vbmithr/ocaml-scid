@@ -397,7 +397,7 @@ let decode_encode_3pages ctx =
 
 let decode_encode_3pages_manual ctx =
   let src = Bytes.create (3 * io_buffer_size) in
-  let dst = Bytes.create (3 * io_buffer_size) in
+  let dst = Bytes.create io_buffer_size in
   let buf = Buffer.create (3 * io_buffer_size) in
   let nb_records = (3 * io_buffer_size - H.size) / R.size in
   Bytes.blit good_hdr 0 src 0 H.size;
@@ -408,7 +408,6 @@ let decode_encode_3pages_manual ctx =
   let nb_encoded = ref 0 in
   let refill_count = ref 0 in
   E.Manual.add_bytes e dst 0 io_buffer_size;
-  let e_refill_count = ref 1 in
   begin try
       while true do
         match D.decode d with
@@ -417,9 +416,8 @@ let decode_encode_3pages_manual ctx =
           (E.encode e @@ `R r |> function
             | `Ok -> incr nb_encoded
             | `Partial ->
-              Buffer.add_subbytes buf dst (pred !e_refill_count * io_buffer_size) (io_buffer_size - E.Manual.rem e);
-              E.Manual.add_bytes e dst (!e_refill_count * io_buffer_size) io_buffer_size;
-              incr e_refill_count;
+              Buffer.add_subbytes buf dst 0 (io_buffer_size - E.Manual.rem e);
+              E.Manual.add_bytes e dst 0 io_buffer_size;
               while E.encode e `Await <> `Ok do () done;
               incr nb_encoded
           )
@@ -440,10 +438,7 @@ let decode_encode_3pages_manual ctx =
   end;
   assert_equal ~printer:string_of_int ~msg:"nb_decoded" nb_records !nb_decoded;
   assert_equal ~printer:string_of_int ~msg:"nb_encoded" nb_records !nb_encoded;
-  assert_equal ~printer:string_of_int ~msg:"encode buffer not used"
-    ((3 * io_buffer_size - H.size) mod R.size) (E.Manual.rem e);
-  let off, len = (Bytes.length src - E.Manual.rem e), E.Manual.rem e in
-  Bytes.blit src off dst off len;
+  assert_equal ~printer:string_of_int ~msg:"encode buffer not used" 32 (E.Manual.rem e);
   let first_diff b b' =
     let ret = ref None in
     let len = Bytes.(min (length b) (length b')) in
@@ -458,7 +453,6 @@ let decode_encode_3pages_manual ctx =
   let printer = function
     | None -> "equal"
     | Some (i, c, c') -> Printf.sprintf "pos %d, %C, %C" i c c' in
-  assert_equal ~msg:"bytes equality" ~printer None (first_diff src dst);
   assert_equal ~msg:"buffer equality" ~printer None (first_diff src @@ Buffer.contents buf)
 
 let suite =
