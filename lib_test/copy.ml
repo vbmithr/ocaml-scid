@@ -32,8 +32,7 @@ let main fn =
     | `Await -> Reader.read r buf >>= function
       | `Eof ->
         Writer.(write (Lazy.force stdout) buf_e
-                  ~len:(io_buffer_size - E.Manual.rem e));
-        return n
+                  ~len:(io_buffer_size - E.Manual.rem e));  return n
       | `Ok len -> D.Manual.refill_bytes d buf 0 len; read_forever n
   in
   read_forever 0 >>= fun n ->
