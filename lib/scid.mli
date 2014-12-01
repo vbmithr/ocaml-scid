@@ -26,8 +26,12 @@ module R : sig
     total_volume : int64;
     bid_volume : int64;
     ask_volume : int64;
-  }
+  } [@@deriving show]
   (** SierraChart's s_IntradayRecord *)
+
+  val compare : t -> t -> int
+  (** [compare r r'] is [Pervasives.compare] of their serialized
+      representation. *)
 
   val size : int
   (** [size] is the size of a (serialized) record, in Bytes.t. *)
@@ -81,7 +85,6 @@ module E : sig
   val encode : t -> [< `Await | `End | `R of R.t ] -> [ `Ok | `Partial ]
 
   module Manual : sig
-    val add_string : t -> string -> int -> int -> unit
     val add_bytes : t -> Bytes.t -> int -> int -> unit
     val rem : t -> int
   end

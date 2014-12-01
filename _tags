@@ -2,5 +2,6 @@ true: debug, bin_annot
 <lib>: include
 <lib_test>: include
 
-<lib/scid.*>: safe_string, package(ocplib-endian)
-<lib_test/*.*>: package(ocplib-endian), package(core), package(async), thread
+<lib/scid.*>: safe_string, package(ocplib-endian), package(ppx_deriving.std)
+<lib_test/suite.*>: package(ocplib-endian), package(oUnit)
+<lib_test/{copy,streaming}.*>: package(ocplib-endian), package(core), package(async), thread

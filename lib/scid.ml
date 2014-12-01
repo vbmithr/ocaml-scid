@@ -42,7 +42,9 @@ module R = struct
     total_volume: int64;
     bid_volume: int64;
     ask_volume: int64;
-  }
+  } [@@deriving show]
+
+
 
   let empty =
     { datetime = 0.; o = 0.; h = 0.; l = 0.; c = 0.;
@@ -92,6 +94,13 @@ module R = struct
     r.total_volume |> set_int64_uint32 buf (pos+28);
     r.bid_volume |> set_int64_uint32 buf (pos+32);
     r.ask_volume |> set_int64_uint32 buf (pos+36)
+
+  let compare r r' =
+    let b = Bytes.make size '\000' in
+    let b' = Bytes.make size '\000' in
+    write r b 0;
+    write r' b' 0;
+    compare b b'
 end
 
 module D = struct
@@ -208,10 +217,6 @@ module E = struct
     let add_bytes e buf pos max =
       if pos < 0 || max < 0 || pos + max > Bytes.length buf then invalid_arg "bounds"
       else e.buf <- buf; e.pos <- pos; e.max <- pos + max - 1
-    let add_string e buf pos max =
-      if pos < 0 || max < 0 || pos + max > String.length buf then invalid_arg "bounds"
-      else e.buf <- Bytes.unsafe_of_string buf; e.pos <- pos; e.max <- pos + max - 1
-
     let rem e = e.max - e.pos + 1
   end
 
@@ -256,7 +261,7 @@ module E = struct
     end
 
   let rec _encode k e v = match v with
-    | `End -> e.pos <- 0; e.max <- Bytes.length e.buf - 1; flush k e
+    | `End -> flush k e
     | `Await -> k e
     | `R r ->
       if e.st = `H then encode_h (encode_r k r) e
