@@ -10,4 +10,4 @@ license: "ISC"
 build: [
   [ "ocaml" "pkg/build.ml" "native=true" "native-dynlink=true" ]
 ]
-depends: ["ocamlfind" {build} "core" "async"]
+depends: ["ocamlfind" {build} "ppx_deriving_yojson" "ounit" "ocplib-endian"]
