@@ -7,17 +7,17 @@ module H = struct
   let size = 56
 
   let init = function
-    | 0 -> 'S' | 1 -> 'C' | 2 -> 'I' | 3 -> 'D'
-    | 4 -> '8' | 8 -> '(' | 12 -> '\001'
-    | _ -> '\000'
+  | 0 -> 'S' | 1 -> 'C' | 2 -> 'I' | 3 -> 'D'
+  | 4 -> '8' | 8 -> '(' | 12 -> '\001'
+  | _ -> '\000'
 
   let valid = String.init size init
 
   let char_valid c = function
-    | 0 -> c = 'S' | 1 -> c = 'C' | 2 -> c = 'I' | 3 -> c = 'D'
-    | 4 -> c = '8' | 8 -> c = '(' | 12 -> c = '\001'
-    | n when ISet.(mem n (of_list [5;6;7;9;10;11])) -> c = '\000'
-    | _ -> true
+  | 0 -> c = 'S' | 1 -> c = 'C' | 2 -> c = 'I' | 3 -> c = 'D'
+  | 4 -> c = '8' | 8 -> c = '(' | 12 -> c = '\001'
+  | n when ISet.(mem n (of_list [5;6;7;9;10;11])) -> c = '\000'
+  | _ -> true
 
   let check b pos =
     try for i = pos to pos + size - 1 do
@@ -184,9 +184,9 @@ module D = struct
   let rec ret d result = d.k <- _decode ret; result
   let make src =
     let buf, pos, max = match src with
-      | `Manual -> Bytes.create 0, 1, 0
-      | `Channel _ -> Bytes.create io_buffer_size, 1, 0
-      | `String s -> Bytes.unsafe_of_string s, 0, String.length s - 1
+    | `Manual -> Bytes.create 0, 1, 0
+    | `Channel _ -> Bytes.create io_buffer_size, 1, 0
+    | `String s -> Bytes.unsafe_of_string s, 0, String.length s - 1
     in
     { src = (src :> src); eoi = false;
       partial = Bytes.create H.size; p_pos = 0;
@@ -220,13 +220,13 @@ module E = struct
   end
 
   let partial k e = function
-    | `Await -> k e
-    | `R _ | `End -> invalid_arg "cannot encode now, use `Await first"
+  | `Await -> k e
+  | `R _ | `End -> invalid_arg "cannot encode now, use `Await first"
 
   let flush k e = match e.dst with
-    | `Manual -> e.k <- partial k; `Partial
-    | `Buffer b -> Buffer.add_subbytes b e.buf 0 e.pos; e.pos <- 0; k e
-    | `Channel oc -> output oc e.buf 0 e.pos; e.pos <- 0; k e
+  | `Manual -> e.k <- partial k; `Partial
+  | `Buffer b -> Buffer.add_subbytes b e.buf 0 e.pos; e.pos <- 0; k e
+  | `Channel oc -> output oc e.buf 0 e.pos; e.pos <- 0; k e
 
   let rec encode_h k e =
     let can_write = e.max - e.pos + 1 in
@@ -260,17 +260,17 @@ module E = struct
     end
 
   let rec _encode k e v = match v with
-    | `End -> flush k e
-    | `Await -> k e
-    | `R r ->
-      if e.st = `H then encode_h (encode_r k r) e
-      else encode_r k r e
+  | `End -> flush k e
+  | `Await -> k e
+  | `R r ->
+    if e.st = `H then encode_h (encode_r k r) e
+    else encode_r k r e
 
   let rec ret e = e.k <- _encode ret; `Ok
   let make dst =
     let buf, pos, max = match dst with
-      | `Manual -> Bytes.create 0, 1, 0
-      | `Channel _ | `Buffer _ -> Bytes.create io_buffer_size, 0, io_buffer_size - 1
+    | `Manual -> Bytes.create 0, 1, 0
+    | `Channel _ | `Buffer _ -> Bytes.create io_buffer_size, 0, io_buffer_size - 1
     in
     { dst = (dst :> dst); buf; pos; max; partial = Bytes.create H.size; p_pos = 0;
       st = `H; k = _encode ret }

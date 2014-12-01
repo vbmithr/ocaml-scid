@@ -60,19 +60,19 @@ let h_plus_0_5b, h_plus_1b, h_plus_1_5b, h_plus_2b  =
 let h_plus_incompleteb = Bytes.sub h_plus_1b 0 90
 
 let printer = function
-  | `End -> "End"
-  | `R r -> "R"
-  | `Error (`Header_invalid hdr)-> Printf.sprintf "Header_invalid %S" hdr
-  | `Error (`Eof s) -> Printf.sprintf "Eof %S" s
-  | `Await -> "Await"
+| `End -> "End"
+| `R r -> "R"
+| `Error (`Header_invalid hdr)-> Printf.sprintf "Header_invalid %S" hdr
+| `Error (`Eof s) -> Printf.sprintf "Eof %S" s
+| `Await -> "Await"
 
 let cmp a b = match a, b with
-  | `End, `End -> true
-  | `R _, `R _ -> true
-  | `Error `Header_invalid _, `Error `Header_invalid _ -> true
-  | `Error (`Eof _), `Error (`Eof _) -> true
-  | `Await, `Await -> true
-  | _ -> false
+| `End, `End -> true
+| `R _, `R _ -> true
+| `Error `Header_invalid _, `Error `Header_invalid _ -> true
+| `Error (`Eof _), `Error (`Eof _) -> true
+| `Await, `Await -> true
+| _ -> false
 
 let decode_recode ctx =
   let open EndianBytes.LittleEndian in
@@ -103,8 +103,8 @@ let decode_recode2 ctx =
 
 let chk_hdr ctx =
   let printer = function
-    | `Ok -> "Ok"
-    | `Error s -> Printf.sprintf "Error: %s" s in
+  | `Ok -> "Ok"
+  | `Error s -> Printf.sprintf "Error: %s" s in
   assert_equal ~printer ~msg:"good_hdr" `Ok (H.check good_hdr 0);
   assert_equal ~printer ~msg:"bad_hdr"
     (`Error (Printf.sprintf "Char at pos 0 should not be %C" '\000'))
@@ -223,23 +223,23 @@ let decode_3pages ctx =
   let d = D.make @@ `String i in
   let nb_decoded = ref 0 in
   begin try
-      while true do
-        match D.decode d with
-        | `R r ->
-          assert_equal
-            ~printer:(fun r -> let b = Bytes.make R.size '\000' in
-                       R.write r b 0; Printf.sprintf "%S" b)
-            ~msg:(Printf.sprintf "record %d" !nb_decoded)
-            (R.read i (H.size + !nb_decoded * R.size)) r;
-          incr nb_decoded
-        | _ -> failwith "break"
-      done
-    with Failure "break" -> () end;
+    while true do
+      match D.decode d with
+      | `R r ->
+        assert_equal
+          ~printer:(fun r -> let b = Bytes.make R.size '\000' in
+                     R.write r b 0; Printf.sprintf "%S" b)
+          ~msg:(Printf.sprintf "record %d" !nb_decoded)
+          (R.read i (H.size + !nb_decoded * R.size)) r;
+        incr nb_decoded
+      | _ -> failwith "break"
+    done
+  with Failure "break" -> () end;
   assert_equal ~msg:"nb_decoded" (((3 * io_buffer_size) - H.size) / R.size ) !nb_decoded
 
 let printer = function
-  | `Ok -> "Ok"
-  | `Partial -> "Partial"
+| `Ok -> "Ok"
+| `Partial -> "Partial"
 
 let encode_manual ctx =
   let len = H.size + R.size in
@@ -371,24 +371,24 @@ let decode_encode_3pages ctx =
   let d = D.make @@ `String src in
   let e = E.make @@ `Buffer dst in
   let nb_encoded = ref 0 in
-    begin try
-        while true do
-          match D.decode d with
-          | `R r ->
-            (E.encode e @@ `R r |> function
-              | `Ok -> incr nb_encoded
-              | `Partial -> assert false)
-          | `End -> failwith "End"
-          | `Error (`Header_invalid s) -> failwith ("Header_invalid " ^ s)
-          | `Error (`Eof b) -> failwith ("EOF " ^ b)
-          | `Await -> assert false
-        done;
-      with Failure s ->
-        assert_equal "EOF" (Bytes.sub s 0 3);
-        assert_equal ~msg:"encoding `End" `Ok (E.encode e `End);
-        assert_equal ~msg:"encoding `Await" `Ok (E.encode e `Await);
-        while E.encode e `Await <> `Ok do () done
-    end;
+  begin try
+    while true do
+      match D.decode d with
+      | `R r ->
+        (E.encode e @@ `R r |> function
+          | `Ok -> incr nb_encoded
+          | `Partial -> assert false)
+      | `End -> failwith "End"
+      | `Error (`Header_invalid s) -> failwith ("Header_invalid " ^ s)
+      | `Error (`Eof b) -> failwith ("EOF " ^ b)
+      | `Await -> assert false
+    done;
+  with Failure s ->
+    assert_equal "EOF" (Bytes.sub s 0 3);
+    assert_equal ~msg:"encoding `End" `Ok (E.encode e `End);
+    assert_equal ~msg:"encoding `Await" `Ok (E.encode e `Await);
+    while E.encode e `Await <> `Ok do () done
+  end;
   let dst = Buffer.contents dst in
   assert_equal ~msg:"nb_encoded" ((3 * io_buffer_size - H.size) / R.size) !nb_encoded;
   assert_equal ~printer:string_of_int
@@ -409,32 +409,32 @@ let decode_encode_3pages_manual ctx =
   let refill_count = ref 0 in
   E.Manual.add_bytes e dst 0 io_buffer_size;
   begin try
-      while true do
-        match D.decode d with
-        | `R r ->
-          incr nb_decoded;
-          (E.encode e @@ `R r |> function
-            | `Ok -> incr nb_encoded
-            | `Partial ->
-              Buffer.add_subbytes buf dst 0 (io_buffer_size - E.Manual.rem e);
-              E.Manual.add_bytes e dst 0 io_buffer_size;
-              while E.encode e `Await <> `Ok do () done;
-              incr nb_encoded
-          )
-        | `End -> failwith "End"
-        | `Error (`Header_invalid s) -> failwith ("Header_invalid " ^ s)
-        | `Error (`Eof b) -> failwith ("EOF " ^ b)
-        | `Await ->
-          if !refill_count < 3 then begin
-            D.Manual.refill_bytes d src (!refill_count*io_buffer_size) io_buffer_size;
-            incr refill_count
-          end else D.Manual.refill_bytes d src 0 0 (* Refill with an empty buf to signal EOF *)
-      done;
-    with Failure s ->
-      assert_equal "EOF" (Bytes.sub s 0 3);
-      assert_equal ~msg:"encoding `End" `Partial (E.encode e `End);
-      assert_equal ~msg:"encoding `Await" `Ok (E.encode e `Await);
-      while E.encode e `Await <> `Ok do () done;
+    while true do
+      match D.decode d with
+      | `R r ->
+        incr nb_decoded;
+        (E.encode e @@ `R r |> function
+          | `Ok -> incr nb_encoded
+          | `Partial ->
+            Buffer.add_subbytes buf dst 0 (io_buffer_size - E.Manual.rem e);
+            E.Manual.add_bytes e dst 0 io_buffer_size;
+            while E.encode e `Await <> `Ok do () done;
+            incr nb_encoded
+        )
+      | `End -> failwith "End"
+      | `Error (`Header_invalid s) -> failwith ("Header_invalid " ^ s)
+      | `Error (`Eof b) -> failwith ("EOF " ^ b)
+      | `Await ->
+        if !refill_count < 3 then begin
+          D.Manual.refill_bytes d src (!refill_count*io_buffer_size) io_buffer_size;
+          incr refill_count
+        end else D.Manual.refill_bytes d src 0 0 (* Refill with an empty buf to signal EOF *)
+    done;
+  with Failure s ->
+    assert_equal "EOF" (Bytes.sub s 0 3);
+    assert_equal ~msg:"encoding `End" `Partial (E.encode e `End);
+    assert_equal ~msg:"encoding `Await" `Ok (E.encode e `Await);
+    while E.encode e `Await <> `Ok do () done;
   end;
   assert_equal ~printer:string_of_int ~msg:"nb_decoded" nb_records !nb_decoded;
   assert_equal ~printer:string_of_int ~msg:"nb_encoded" nb_records !nb_encoded;
@@ -443,16 +443,16 @@ let decode_encode_3pages_manual ctx =
     let ret = ref None in
     let len = Bytes.(min (length b) (length b')) in
     (try
-       for i = 0 to len - 1 do
-         if Bytes.get b i <> Bytes.get b' i
-         then (ret := Some (i, Bytes.get b i, Bytes.get b' i) ; raise Exit)
-       done
-     with Exit -> ());
+      for i = 0 to len - 1 do
+        if Bytes.get b i <> Bytes.get b' i
+        then (ret := Some (i, Bytes.get b i, Bytes.get b' i) ; raise Exit)
+      done
+    with Exit -> ());
     !ret
   in
   let printer = function
-    | None -> "equal"
-    | Some (i, c, c') -> Printf.sprintf "pos %d, %C, %C" i c c' in
+  | None -> "equal"
+  | Some (i, c, c') -> Printf.sprintf "pos %d, %C, %C" i c c' in
   assert_equal ~msg:"buffer equality" ~printer None (first_diff src @@ Buffer.contents buf)
 
 let suite =
