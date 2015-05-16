@@ -61,12 +61,16 @@ module R = struct
   let unix_time_of_sc_time v = (v -. 25571.) *. 86400.
   let sc_time_of_unix_time v = v /. 86400. +. 25571.
 
-  let tmpbuf = Bytes.make 8 '\000'
+  let mk_with_buf bufsize f =
+    let tmpbuf = Bytes.make bufsize '\000' in
+    f tmpbuf
+
   let read buf pos =
     let open EndianBytes.LittleEndian in
-    let get_uint32 b p =
+    let get_uint32 tmpbuf b p =
       Bytes.blit b p tmpbuf 0 4;
       get_int64 tmpbuf 0 in
+    let get_uint32 = mk_with_buf 8 get_uint32 in
     let datetime = get_int64 buf pos |> Int64.float_of_bits in
     let o = get_int32 buf (pos+8) |> Int32.float_of_bits in
     let h = get_int32 buf (pos+12) |> Int32.float_of_bits in
@@ -82,9 +86,10 @@ module R = struct
 
   let write r buf pos =
     let open EndianBytes.LittleEndian in
-    let set_int64_uint32 b p i =
+    let set_int64_uint32 tmpbuf b p i =
       set_int64 tmpbuf 0 i;
       Bytes.blit tmpbuf 0 b p 4 in
+    let set_int64_uint32 = mk_with_buf 8 set_int64_uint32 in
     r.datetime |> Int64.bits_of_float |> set_int64 buf pos;
     r.o |> Int32.bits_of_float |> set_int32 buf (pos+8);
     r.h |> Int32.bits_of_float |> set_int32 buf (pos+12);
