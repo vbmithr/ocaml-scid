@@ -6,3 +6,4 @@ true: debug, bin_annot
 <lib_test/suite.*>: package(ocplib-endian), package(oUnit)
 <lib_test/copy.*>: package(ocplib-endian)
 <lib_test/test_decoder.*>: package(ocplib-endian), package(bigarray)
+<lib_test/browser.*>: package(ocplib-endian), package(bigarray)
