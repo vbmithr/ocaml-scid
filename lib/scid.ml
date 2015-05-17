@@ -33,7 +33,7 @@ end
 
 module R = struct
   type t = {
-    datetime: float;
+    datetime: float [@printer fun fmt -> fprintf fmt "%.20f"];
     o: float;
     h: float;
     l: float;
@@ -42,24 +42,9 @@ module R = struct
     total_volume: int64;
     bid_volume: int64;
     ask_volume: int64;
-  } [@@deriving show]
-
-
-
-  let empty =
-    { datetime = 0.; o = 0.; h = 0.; l = 0.; c = 0.;
-      num_trades = 0L; total_volume = 0L; bid_volume = 0L;
-      ask_volume = 0L;
-    }
+  } [@@deriving show,create]
 
   let size = 40
-
-  (* The DateTime member variable is a double precision floating-point
-      value. The integer part of the value is the number of days since
-      midnight, 30 December 1899. The fractional part of the value
-      represents time. .5 would represent 12:00 PM. *)
-  let unix_time_of_sc_time v = (v -. 25571.) *. 86400.
-  let sc_time_of_unix_time v = v /. 86400. +. 25571.
 
   let mk_with_buf bufsize f =
     let tmpbuf = Bytes.make bufsize '\000' in

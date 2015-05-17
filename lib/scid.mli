@@ -27,7 +27,7 @@ module R : sig
     total_volume : int64;
     bid_volume : int64;
     ask_volume : int64;
-  } [@@deriving show]
+  } [@@deriving show,create]
   (** SierraChart's s_IntradayRecord *)
 
   val compare : t -> t -> int
@@ -36,9 +36,6 @@ module R : sig
 
   val size : int
   (** [size] is the size of a (serialized) record, in bytes. *)
-
-  val empty : t
-  (** [empty] is a record where all fields are zero. *)
 
   val read : Bytes.t -> int -> t
   (** [read ~pos b] is the record serialized in [b] starting at
