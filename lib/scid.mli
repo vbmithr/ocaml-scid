@@ -51,7 +51,7 @@ module D : sig
   type src = [ `Channel of in_channel | `String of string | `Manual ]
   (** The type for input sources. *)
 
-  type e = [ `Header_invalid of string | `Eof of string ]
+  type e = [ `Header_invalid of string | `Eof of string ] [@@deriving show]
   (** The type for errors. *)
 
   type t

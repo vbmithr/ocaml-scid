@@ -95,7 +95,7 @@ end
 
 module D = struct
   type src = [ `Channel of in_channel | `String of string | `Manual ]
-  type e = [ `Eof of string | `Header_invalid of string ]
+  type e = [ `Eof of string | `Header_invalid of string ] [@@deriving show]
   type t = {
     src: src;
     partial: Bytes.t;
