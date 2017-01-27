@@ -3,6 +3,5 @@ true: debug, bin_annot
 <lib_test>: include
 
 <**/*.*>: package(ocplib-endian), \
-	  package(ppx_deriving.std), \
 	  package(oUnit), \
 	  package(bigarray)

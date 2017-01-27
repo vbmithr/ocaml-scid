@@ -1,9 +1,8 @@
-PRJ scid
 S lib
-S lib/test
+S lib_test
 B _build/lib
 B _build/lib_test
-PKG core
-PKG async
+
 PKG ocplib-endian
-PKG containers
+PKG bigarray
+PKG oUnit

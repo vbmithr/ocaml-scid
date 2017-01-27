@@ -27,8 +27,10 @@ module R : sig
     total_volume : int64;
     bid_volume : int64;
     ask_volume : int64;
-  } [@@deriving show,create]
+  }
   (** SierraChart's s_IntradayRecord *)
+
+  val pp : Format.formatter -> t -> unit
 
   val compare : t -> t -> int
   (** [compare r r'] is [Pervasives.compare] of their serialized
@@ -51,7 +53,7 @@ module D : sig
   type src = [ `Channel of in_channel | `String of string | `Manual ]
   (** The type for input sources. *)
 
-  type e = [ `Header_invalid of string | `Eof of string ] [@@deriving show]
+  type e = [ `Header_invalid of string | `Eof of string ]
   (** The type for errors. *)
 
   type t

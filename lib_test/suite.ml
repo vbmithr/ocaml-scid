@@ -234,7 +234,7 @@ let decode_3pages ctx =
         incr nb_decoded
       | _ -> failwith "break"
     done
-  with Failure "break" -> () end;
+  with Failure _ -> () end;
   assert_equal ~msg:"nb_decoded" (((3 * io_buffer_size) - H.size) / R.size ) !nb_decoded
 
 let printer = function

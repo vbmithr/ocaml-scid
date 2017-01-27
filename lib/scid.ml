@@ -33,7 +33,7 @@ end
 
 module R = struct
   type t = {
-    datetime: float [@printer fun fmt -> fprintf fmt "%.20f"];
+    datetime: float;
     o: float;
     h: float;
     l: float;
@@ -42,7 +42,12 @@ module R = struct
     total_volume: int64;
     bid_volume: int64;
     ask_volume: int64;
-  } [@@deriving show,create]
+  }
+
+  let pp fmt { datetime ; o ; h ; l ; c ; num_trades ;
+               total_volume ; bid_volume ; ask_volume ; } =
+    Format.fprintf fmt ".2%f %f %f %f %f %Ld %Ld %Ld %Ld"
+      datetime o h l c num_trades total_volume bid_volume ask_volume
 
   let size = 40
 
@@ -95,7 +100,7 @@ end
 
 module D = struct
   type src = [ `Channel of in_channel | `String of string | `Manual ]
-  type e = [ `Eof of string | `Header_invalid of string ] [@@deriving show]
+  type e = [ `Eof of string | `Header_invalid of string ]
   type t = {
     src: src;
     partial: Bytes.t;
