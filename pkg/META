@@ -1,6 +1,6 @@
 version = "0.1"
 description = "Sierra Chart SCID files parser for OCaml"
-requires = "ppx_deriving_yojson ocplib-endian"
+requires = "ocplib-endian"
 archive(byte) = "scid.cma"
 archive(byte, plugin) = "scid.cma"
 archive(native) = "scid.cmxa"

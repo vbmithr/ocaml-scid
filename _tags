@@ -4,5 +4,5 @@ true: debug, bin_annot, warn(-40)
 
 <**/*.*>: package(result), \
           package(ocplib-endian), \
-	  package(oUnit), \
-	  package(bigarray)
+          package(oUnit), \
+          package(bigarray)

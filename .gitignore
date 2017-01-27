@@ -2,5 +2,3 @@
 *.byte
 *.install
 _build
-setup.data
-setup.log
