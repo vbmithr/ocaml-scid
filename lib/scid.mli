@@ -7,9 +7,9 @@ module H : sig
   val size : int
   (** [size] is the size of the SCID header, in bytes. *)
 
-  val check : Bytes.t -> int -> [ `Ok | `Error of string ]
-  (** [check b p] is [`Ok] if [b] contains a valid header starting at
-      [p], and [`Error] otherwise *)
+  val check : Bytes.t -> int -> (unit, string) Result.result
+  (** [check b p] is [Ok ()] if [b] contains a valid header starting at
+      [p], and [Error msg] otherwise *)
 
   val write : ?start:int -> ?len:int -> Bytes.t -> int -> unit
   (** [write ~start ~len b p] write the portion of the valid SCID
@@ -50,19 +50,32 @@ end
 (** {1 Decoding} *)
 
 module D : sig
-  type src = [ `Channel of in_channel | `String of string | `Manual ]
+  type src =
+    | Channel of in_channel
+    | String of string
+    | Manual
   (** The type for input sources. *)
 
-  type e = [ `Header_invalid of string | `Eof of string ]
-  (** The type for errors. *)
+  type error =
+    | Header_invalid of string
+    | Eof of string
+    (** The type for errors. *)
+
+  val pp_error : Format.formatter -> error -> unit
 
   type t
   (** The type for decoders. *)
 
-  val make : [< src] -> t
+  val make : src -> t
   (** [decoder src] is a decoder that inputs from src. *)
 
-  val decode : t -> [ `R of R.t | `Await | `End | `Error of e ]
+  type decode_result =
+    | R of R.t
+    | Await
+    | End
+    | Error of error
+
+  val decode : t -> decode_result
   (** [decode d] is:
       {ul
       {- [`Await] iff [d] has a [`Manual] input source and awaits
@@ -94,16 +107,24 @@ end
 (** {1 Encoding} *)
 
 module E : sig
-  type dst = [ `Channel of out_channel | `Buffer of Buffer.t | `Manual ]
+  type dst =
+    | Channel of out_channel
+    | Buffer of Buffer.t
+    | Manual
   (** The type for output destinations. *)
 
   type t
   (** The type for R encoders. *)
 
-  val make : [< dst] -> t
+  val make : dst -> t
   (** [encoder dst] is an encoder that outputs to [dst]. *)
 
-  val encode : t -> [< `Await | `End | `R of R.t ] -> [ `Ok | `Partial ]
+  type encode =
+    | Await
+    | End
+    | R of R.t
+
+  val encode : t -> encode -> [ `Ok | `Partial ]
   (** [encode e v] is :
       {ul
       {- [`Partial] iff [e] has a [`Manual] destination and needs
