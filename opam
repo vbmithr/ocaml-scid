@@ -1,17 +1,26 @@
 opam-version: "1.2"
-name: "scid"
-version: "0.1"
 maintainer: "Vincent Bernardoff <vb@luminar.eu.org>"
-authors: "Vincent Bernardoff <vb@luminar.eu.org>"
-homepage: "http://github.com/vbmithr/ocaml-scid"
-bug-reports: "http://github.com/vbmithr/ocaml-scid/issues"
-dev-repo: "git://github.com/vbmithr/ocaml-scid"
+authors: ["Vincent Bernardoff <vb@luminar.eu.org>"]
+homepage: "https://github.com/vbmithr/scid"
+doc: "https://vbmithr.github.io/scid/doc"
 license: "ISC"
-build: [
-  [ "ocaml" "pkg/build.ml" "native=true" "native-dynlink=true" ]
-]
+dev-repo: "https://github.com/vbmithr/scid.git"
+bug-reports: "https://github.com/vbmithr/scid/issues"
+tags: []
+available: [ ocaml-version >= "4.01.0"]
 depends: [
   "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "topkg" {build}
   "ounit" {test}
+  "result"
   "ocplib-endian"
 ]
+depopts: []
+build:
+[[ "ocaml" "pkg/pkg.ml" "build"
+           "--pinned" "%{pinned}%" ]]
+
+build-test: [
+ [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true" ]
+ [ "ocaml" "pkg/pkg.ml" "test" ]]

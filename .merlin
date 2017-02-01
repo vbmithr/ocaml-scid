@@ -1,10 +1,5 @@
-S lib
-S lib_test
-B _build/lib
-B _build/lib_test
-
-PKG result
-PKG ocplib-endian
-PKG bigarray
-PKG oUnit
 FLG -w -40
+PKG bytes result ocplib-endian oUnit
+S src
+S test
+B _build/**

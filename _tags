@@ -1,12 +1,13 @@
-true: debug, bin_annot, warn(-40)
-<lib>: include
-<lib_test>: include
+true : bin_annot, package(bytes), warn(-40)
 
-<lib/*>: package(result), \
+<src> : include
+<test> : include
+
+<src/*>: package(result), \
          package(ocplib-endian), \
          package(bigarray)
 
-<lib_test/*>: package(result), \
-              package(ocplib-endian), \
-              package(bigarray), \
-              package(oUnit)
+<test/*>: package(result), \
+          package(ocplib-endian), \
+          package(bigarray), \
+          package(oUnit)
