@@ -2,7 +2,11 @@ true: debug, bin_annot, warn(-40)
 <lib>: include
 <lib_test>: include
 
-<**/*.*>: package(result), \
-          package(ocplib-endian), \
-          package(oUnit), \
-          package(bigarray)
+<lib/*>: package(result), \
+         package(ocplib-endian), \
+         package(bigarray)
+
+<lib_test/*>: package(result), \
+              package(ocplib-endian), \
+              package(bigarray), \
+              package(oUnit)
