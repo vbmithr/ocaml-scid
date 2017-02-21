@@ -1,4 +1,4 @@
-vX.Y.Z YYYY-MM-DD Location
+v1.0 2017-02-21 Paris
 --------------------------
 
-First release. 
+First release.
