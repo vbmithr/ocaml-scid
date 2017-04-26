@@ -1,0 +1,9 @@
+(executables
+ ((names (suite copy browser test_decoder))
+  (public_names (- scid-copy scid-browser scid-test-decoder))
+  (libraries (scid bigarray oUnit))))
+
+(alias
+ ((name    runtest)
+  (deps    (suite.exe))
+  (action  (run ${<}))))

@@ -11,18 +11,12 @@ bug-reports: "https://github.com/vbmithr/scid/issues"
 tags: []
 available: [ ocaml-version >= "4.02.0"]
 depends: [
-  "ocamlfind" {build}
-  "ocamlbuild" {build}
-  "topkg" {build}
+  "jbuilder" {build & >= "1.0+beta8"}
   "ounit" {test}
   "result"
   "ocplib-endian" {>= "1.0"}
 ]
 depopts: []
-build:
-[[ "ocaml" "pkg/pkg.ml" "build"
-           "--pinned" "%{pinned}%" ]]
+build:[ "jbuilder" "build" "-j" jobs "@install" ]
+build-test: [ "jbuilder" "build" "-j" jobs "@runtest" ]
 
-build-test: [
- [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true" ]
- [ "ocaml" "pkg/pkg.ml" "test" ]]

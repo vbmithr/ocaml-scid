@@ -1,3 +1,5 @@
 all:
-	./build test
-	./suite.native
+	jbuilder build @install @runtest
+
+clean:
+	rm -rf _build

@@ -1,7 +1,0 @@
-description = "Sierra Chart IntraDay file format for OCaml"
-version = "%%VERSION%%"
-requires = "result ocplib-endian"
-archive(byte) = "scid.cma"
-archive(native) = "scid.cmxa"
-plugin(byte) = "scid.cma"
-plugin(native) = "scid.cmxs"
