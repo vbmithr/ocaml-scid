@@ -1,0 +1,5 @@
+(executables
+ ((names (copy browser test_decoder))
+  (public_names (scid-copy scid-browser scid-test-decoder))
+  (modules (browser test_decoder copy))
+  (libraries (scid bigarray))))
