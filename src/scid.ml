@@ -31,8 +31,8 @@ module H = struct
 
   let check b pos =
     try for i = pos to pos + size - 1 do
-        if not @@ char_valid (Bytes.get b i) (i-pos)
-        then failwith (Printf.sprintf "Char at pos %d should not be %C" i (Bytes.get b i))
+        if not @@ char_valid (String.get b i) (i-pos)
+        then failwith (Printf.sprintf "Char at pos %d should not be %C" i (String.get b i))
       done; (Result.Ok ())
     with Failure s -> (Result.Error s)
 
@@ -65,11 +65,12 @@ module R = struct
     let tmpbuf = Bytes.make bufsize '\000' in
     f tmpbuf
 
+  let get_uint32 tmpbuf b p =
+    Bytes.blit_string b p tmpbuf 0 4;
+    EndianBytes.LittleEndian.get_int64 tmpbuf 0
+
   let read buf pos =
-    let open EndianBytes.LittleEndian in
-    let get_uint32 tmpbuf b p =
-      Bytes.blit b p tmpbuf 0 4;
-      get_int64 tmpbuf 0 in
+    let open EndianString.LittleEndian in
     let get_uint32 = mk_with_buf 8 get_uint32 in
     let datetime = get_int64 buf pos |> Int64.float_of_bits in
     let o = get_int32 buf (pos+8) |> Int32.float_of_bits in
@@ -83,6 +84,9 @@ module R = struct
     {
       datetime; o; h; l; c; num_trades; total_volume; bid_volume; ask_volume
     }
+
+  let read_bytes buf pos =
+    read (Bytes.unsafe_to_string buf) pos
 
   let write r buf pos =
     let open EndianBytes.LittleEndian in
@@ -108,19 +112,23 @@ module R = struct
     compare b b'
 end
 
+type auto (** type of auto sources *)
+type manual (** type of manual sources *)
+
 module D = struct
-  type src =
-    | Channel of in_channel
-    | String of string
-    | Manual
+  type _ src =
+    | Channel : in_channel -> auto src
+    | String : string -> auto src
+    | Bytes : Bytes.t -> auto src
+    | Manual : manual src
 
   type error =
     | Header_invalid of string
     | Eof of string
 
-  let pp_error fmt = function
-  | Header_invalid msg -> Format.fprintf fmt "Header invalid: %s" msg
-  | Eof msg -> Format.fprintf fmt "End of file: %s" msg
+  let pp_error ppf = function
+  | Header_invalid msg -> Format.fprintf ppf "Header invalid: %s" msg
+  | Eof msg -> Format.fprintf ppf "End of file: %s" msg
 
   type decode_result =
     | R of R.t
@@ -128,8 +136,8 @@ module D = struct
     | End
     | Error of error
 
-  type t = {
-    src: src;
+  type 'a t = {
+    src: 'a src;
     partial: Bytes.t;
     mutable p_pos: int;
     mutable eoi: bool;
@@ -137,7 +145,7 @@ module D = struct
     mutable buf: Bytes.t;
     mutable pos: int;
     mutable max: int;
-    mutable k: t -> decode_result;
+    mutable k: 'a t -> decode_result;
   }
 
   let eoi d =
@@ -152,9 +160,11 @@ module D = struct
       if l = 0 then eoi d else d.buf <- b; d.pos <- p ; d.max <- p + l - 1
   end
 
-  let refill k d =
+  let refill :
+    type a. (a t -> decode_result) -> a t -> decode_result = fun k d ->
     match d.src with
     | String _ -> eoi d; k d
+    | Bytes _ -> eoi d; k d
     | Manual -> d.k <- k; Await
     | Channel ic ->
       let rc = input ic d.buf 0 (Bytes.length d.buf) in
@@ -165,30 +175,33 @@ module D = struct
     assert (d.st = `H);
     if d.p_pos = 0 && can_read >= H.size then
       let pos = d.pos in d.pos <- d.pos + H.size; d.st <- `R;
-      match H.check d.buf pos with
+      match H.check (Bytes.unsafe_to_string d.buf) pos with
       | Result.Ok () -> _decode k d
-      | Error _ -> k d @@ Error (Header_invalid Bytes.(sub d.buf pos H.size |> unsafe_to_string))
+      | Error _ ->
+          k d @@ Error (Header_invalid (Bytes.sub_string d.buf pos H.size))
     else
       let len = min can_read (H.size - d.p_pos) in
       Bytes.blit d.buf d.pos d.partial d.p_pos len;
       d.pos <- d.pos + len;
       d.p_pos <- (d.p_pos + len) mod H.size;
       if d.p_pos = 0 then begin d.st <- `R;
-        match H.check d.partial 0 with
+        match H.check (Bytes.unsafe_to_string d.partial) 0 with
         | Result.Ok () -> _decode k d
-        | Error _ -> k d @@ Error (Header_invalid Bytes.(sub d.partial 0 H.size |> unsafe_to_string)) end
+        | Error _ ->
+            k d @@ Error (Header_invalid Bytes.(sub_string d.partial 0 H.size))
+      end
       else _decode k d
 
   and r_record k d =
     let can_read = d.max - d.pos + 1 in
     if d.p_pos = 0 && can_read >= R.size then
-      let pos = d.pos in d.pos <- d.pos + R.size; k d (R (R.read d.buf pos))
+      let pos = d.pos in d.pos <- d.pos + R.size; k d (R (R.read_bytes d.buf pos))
     else
       let len = min can_read (R.size - d.p_pos) in
       Bytes.blit d.buf d.pos d.partial d.p_pos len;
       d.pos <- d.pos + len;
       d.p_pos <- (d.p_pos + len) mod R.size;
-      if d.p_pos = 0 then k d (R (R.read d.partial 0)) else _decode k d
+      if d.p_pos = 0 then k d (R (R.read_bytes d.partial 0)) else _decode k d
 
   and _decode k d =
     if d.eoi then
@@ -198,23 +211,37 @@ module D = struct
       | _ ->
         let l = d.p_pos in
         d.p_pos <- 0;
-        (Error (Eof Bytes.(sub d.partial 0 l |> unsafe_to_string)))
+        Error (Eof Bytes.(sub_string d.partial 0 l))
     else if d.max - d.pos + 1 < 1 then refill (_decode k) d
     else if d.st = `H then r_header k d
     else r_record k d
 
   let rec ret d result = d.k <- _decode ret; result
-  let make src =
-    let buf, pos, max = match src with
-    | Manual -> Bytes.create 0, 1, 0
-    | Channel _ -> Bytes.create io_buffer_size, 1, 0
-    | String s -> Bytes.unsafe_of_string s, 0, String.length s - 1
-    in
+
+  let make' src buf pos max =
     { src = src; eoi = false;
       partial = Bytes.create H.size; p_pos = 0;
       st = `H; buf; pos; max;
       k = _decode ret
     }
+
+  let make : type a. a src -> a t = fun src ->
+    let buf, pos, max = match src with
+    | Manual -> Bytes.create 0, 1, 0
+    | Channel _ -> Bytes.create io_buffer_size, 1, 0
+    | String s -> Bytes.unsafe_of_string s, 0, String.length s - 1
+    | Bytes b -> b, 0, Bytes.length b - 1
+    in
+    make' src buf pos max
+
+  let of_string s =
+    make' (String s) (Bytes.unsafe_of_string s) 0 (String.length s - 1)
+  let of_bytes b =
+    make' (Bytes b) b 0 (Bytes.length b - 1)
+  let of_channel ch =
+    make' (Channel ch) (Bytes.create io_buffer_size) 1 0
+  let manual () =
+    make' Manual (Bytes.create 0) 1 0
 
   let decode d = d.k d
 end
@@ -222,25 +249,25 @@ end
 (* Encode *)
 
 module E = struct
-  type dst =
-    | Channel of out_channel
-    | Buffer of Buffer.t
-    | Manual
+  type _ dst =
+    | Channel : out_channel -> auto dst
+    | Buffer : Buffer.t -> auto dst
+    | Manual : manual dst
 
   type encode =
     | Await
     | End
     | R of R.t
 
-  type t = {
-    dst: dst;
+  type 'a t = {
+    dst: 'a dst;
     partial: Bytes.t;
     mutable p_pos: int;
     mutable st: [ `H | `R ];
     mutable buf : Bytes.t;
     mutable pos : int;
     mutable max : int;
-    mutable k : t -> encode -> [ `Ok | `Partial ] }
+    mutable k : 'a t -> encode -> [ `Ok | `Partial ] }
 
   module Manual = struct
     let add_bytes e buf pos max =
@@ -254,10 +281,12 @@ module E = struct
   | R _
   | End -> invalid_arg "cannot encode now, use Await first"
 
-  let flush k e = match e.dst with
-  | Manual -> e.k <- partial k; `Partial
-  | Buffer b -> Buffer.add_subbytes b e.buf 0 e.pos; e.pos <- 0; k e
-  | Channel oc -> output oc e.buf 0 e.pos; e.pos <- 0; k e
+  let flush :
+    type a. (a t -> [ `Ok | `Partial ]) -> a t -> [ `Ok | `Partial ] =
+    fun k e -> match e.dst with
+    | Manual -> e.k <- partial k; `Partial
+    | Buffer b -> Buffer.add_subbytes b e.buf 0 e.pos; e.pos <- 0; k e
+    | Channel oc -> output oc e.buf 0 e.pos; e.pos <- 0; k e
 
   let rec encode_h k e =
     let can_write = e.max - e.pos + 1 in
@@ -298,14 +327,25 @@ module E = struct
     else encode_r k r e
 
   let rec ret e = e.k <- _encode ret; `Ok
-  let make dst =
-    let buf, pos, max = match dst with
-    | Manual -> Bytes.create 0, 1, 0
-    | Channel _
-    | Buffer _ -> Bytes.create io_buffer_size, 0, io_buffer_size - 1
-    in
+
+  let make' dst buf pos max =
     { dst = dst; buf; pos; max; partial = Bytes.create H.size; p_pos = 0;
       st = `H; k = _encode ret }
+
+  let make : type a. a dst -> a t = fun dst ->
+    let buf, pos, max = match dst with
+    | Manual -> Bytes.create 0, 1, 0
+    | Channel _ -> Bytes.create io_buffer_size, 0, io_buffer_size - 1
+    | Buffer _ -> Bytes.create io_buffer_size, 0, io_buffer_size - 1
+    in
+    make' dst buf pos max
+
+  let of_channel ch =
+    make' (Channel ch) (Bytes.create io_buffer_size) 0 (io_buffer_size - 1)
+  let of_buffer buf =
+    make' (Buffer buf) (Bytes.create io_buffer_size) 0 (io_buffer_size - 1)
+  let manual () =
+    make' Manual (Bytes.create 0) 1 0
 
   let encode e v = e.k e (v :> encode)
 end

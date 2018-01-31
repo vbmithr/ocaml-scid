@@ -13,7 +13,7 @@ module H : sig
   val size : int
   (** [size] is the size of the SCID header, in bytes. *)
 
-  val check : Bytes.t -> int -> (unit, string) Result.result
+  val check : string -> int -> (unit, string) Result.result
   (** [check b p] is [Ok ()] if [b] contains a valid header starting at
       [p], and [Error msg] otherwise *)
 
@@ -45,7 +45,11 @@ module R : sig
   val size : int
   (** [size] is the size of a (serialized) record, in bytes. *)
 
-  val read : Bytes.t -> int -> t
+  val read : string -> int -> t
+  (** [read ~pos b] is the record serialized in [b] starting at
+      [pos]. *)
+
+  val read_bytes : Bytes.t -> int -> t
   (** [read ~pos b] is the record serialized in [b] starting at
       [pos]. *)
 
@@ -53,13 +57,17 @@ module R : sig
   (** [write t ~pos b] writes [t] in [b] at [pos]. *)
 end
 
+type auto (** type of auto sources *)
+type manual (** type of manual sources *)
+
 (** {1 Decoding} *)
 
 module D : sig
-  type src =
-    | Channel of in_channel
-    | String of string
-    | Manual
+  type _ src =
+    | Channel : in_channel -> auto src
+    | String : string -> auto src
+    | Bytes : Bytes.t -> auto src
+    | Manual : manual src
   (** The type for input sources. *)
 
   type error =
@@ -69,11 +77,16 @@ module D : sig
 
   val pp_error : Format.formatter -> error -> unit
 
-  type t
+  type 'a t
   (** The type for decoders. *)
 
-  val make : src -> t
+  val make : 'a src -> 'a t
   (** [decoder src] is a decoder that inputs from src. *)
+
+  val of_channel : in_channel -> auto t
+  val of_string : string -> auto t
+  val of_bytes : Bytes.t -> auto t
+  val manual : unit -> manual t
 
   type decode_result =
     | R of R.t
@@ -81,7 +94,7 @@ module D : sig
     | End
     | Error of error
 
-  val decode : t -> decode_result
+  val decode : _ t -> decode_result
   (** [decode d] is:
       {ul
       {- [`Await] iff [d] has a [`Manual] input source and awaits
@@ -97,7 +110,7 @@ module D : sig
 
   (** Manual sources. *)
   module Manual : sig
-    val refill_string : t -> string -> int -> int -> unit
+    val refill_string : manual t -> string -> int -> int -> unit
     (** [refill_string d s k l] provides [d] with [l] bytes to read,
         starting at [k] in [s]. This byte range is read by calls to {!decode}
         with [d] until [`Await] is returned. To signal the end of input
@@ -105,7 +118,7 @@ module D : sig
 
         {b Warning.} Do not use with non-[`Manual] decoder sources. *)
 
-    val refill_bytes : t -> Bytes.t -> int -> int -> unit
+    val refill_bytes : manual t -> Bytes.t -> int -> int -> unit
     (** See {!refill_string}. *)
   end
 end
@@ -113,24 +126,28 @@ end
 (** {1 Encoding} *)
 
 module E : sig
-  type dst =
-    | Channel of out_channel
-    | Buffer of Buffer.t
-    | Manual
+  type _ dst =
+    | Channel : out_channel -> auto dst
+    | Buffer : Buffer.t -> auto dst
+    | Manual : manual dst
   (** The type for output destinations. *)
 
-  type t
+  type _ t
   (** The type for R encoders. *)
 
-  val make : dst -> t
-  (** [encoder dst] is an encoder that outputs to [dst]. *)
+  val make : 'a dst -> 'a t
+  (** [make dst] is an encoder that outputs to [dst]. *)
+
+  val of_channel : out_channel -> auto t
+  val of_buffer : Buffer.t -> auto t
+  val manual : unit -> manual t
 
   type encode =
     | Await
     | End
     | R of R.t
 
-  val encode : t -> encode -> [ `Ok | `Partial ]
+  val encode : _ t -> encode -> [ `Ok | `Partial ]
   (** [encode e v] is :
       {ul
       {- [`Partial] iff [e] has a [`Manual] destination and needs
@@ -150,7 +167,7 @@ module E : sig
 
   (** Manual destinations. *)
   module Manual : sig
-    val add_bytes : t -> Bytes.t -> int -> int -> unit
+    val add_bytes : manual t -> Bytes.t -> int -> int -> unit
     (** [add_bytes e s k l] provides [e] with [l] bytes to write,
         starting at [k] in [s]. This byte range is written by calls to
         {!encode} with [e] until [`Partial] is returned.  Use {!rem}
@@ -159,7 +176,7 @@ module E : sig
         {b Warning.} Do not use with non-[`Manual] encoder destinations.
     *)
 
-    val rem : t -> int
+    val rem : manual t -> int
     (** [rem e] is the remaining number of non-written, free bytes
         in the last buffer provided with {!add_bytes}. *)
   end
