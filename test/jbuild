@@ -1,9 +1,0 @@
-(executable
- ((name suite)
-  (modules (suite))
-  (libraries (scid bigarray oUnit))))
-
-(alias
- ((name    runtest)
-  (deps    (suite.exe))
-  (action  (run ${<}))))

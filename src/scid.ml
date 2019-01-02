@@ -9,11 +9,6 @@ let io_buffer_size = 4096
 module ISet = Set.Make(struct type t = int let compare = Pervasives.compare end)
 
 module H = struct
-  type state =
-    | Checking of int
-    | Valid
-    | Invalid
-
   let size = 56
 
   let init = function
@@ -112,8 +107,11 @@ module R = struct
     compare b b'
 end
 
-type auto (** type of auto sources *)
-type manual (** type of manual sources *)
+type auto
+(** type of auto sources *)
+
+type manual
+(** type of manual sources *)
 
 module D = struct
   type _ src =
@@ -319,7 +317,7 @@ module E = struct
         if e.p_pos = 0 then (k e) else (encode_r k r e)
     end
 
-  let rec _encode k e v = match v with
+  let _encode k e v = match v with
   | End -> flush k e
   | Await -> k e
   | R r ->

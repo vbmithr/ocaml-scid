@@ -1,5 +1,0 @@
-(library
- ((name        scid)
-  (public_name scid)
-  (modules (scid))
-  (libraries (result ocplib-endian))))

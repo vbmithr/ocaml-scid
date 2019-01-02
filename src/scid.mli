@@ -57,8 +57,11 @@ module R : sig
   (** [write t ~pos b] writes [t] in [b] at [pos]. *)
 end
 
-type auto (** type of auto sources *)
-type manual (** type of manual sources *)
+type auto
+(** type of auto sources *)
+
+type manual
+(** type of manual sources *)
 
 (** {1 Decoding} *)
 

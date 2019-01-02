@@ -71,7 +71,7 @@ let h_plus_incompleteb = String.sub h_plus_1b 0 90
 
 let printer = function
 | D.End -> "End"
-| R r -> "R"
+| R _ -> "R"
 | Error (Header_invalid hdr)-> Printf.sprintf "Header_invalid %S" hdr
 | Error (Eof s) -> Printf.sprintf "Eof %S" s
 | Await -> "Await"
@@ -84,7 +84,7 @@ let cmp a b = match a, b with
 | Await, Await -> true
 | _ -> false
 
-let decode_recode ctx =
+let decode_recode _ctx =
   let open EndianBytes.LittleEndian in
   let r' = Bytes.make R.size '\000' in
   for i = 0 to 1000 do
@@ -104,14 +104,14 @@ let decode_recode ctx =
     assert_equal ~msg:(string_of_int i) r r'
   done
 
-let decode_recode2 ctx =
+let decode_recode2 _ctx =
   let r = random_r () in
   let b = Bytes.make R.size '\000' in
   R.write r b 0;
   let r' = R.read_bytes b 0 in
   assert_equal ~cmp:(fun a b -> R.compare a b = 0) r r'
 
-let chk_hdr ctx =
+let chk_hdr _ctx =
   let printer = function
   | Result.Ok () -> "Ok"
   | Result.Error s -> Printf.sprintf "Error: %s" s in
@@ -120,22 +120,22 @@ let chk_hdr ctx =
     (Error (Printf.sprintf "Char at pos 0 should not be %C" '\000'))
     (H.check bad_hdr 0)
 
-let empty ctx =
+let empty _ctx =
   let d = D.of_string buf0 in
   assert_equal ~printer End (D.decode d)
 
-let empty_manual ctx =
+let empty_manual _ctx =
   let d = D.make @@ Manual in
   assert_equal ~msg:"before_feed" ~printer Await (D.decode d);
   D.Manual.refill_string d buf0 0 0;
   assert_equal ~msg:"after_feed" ~printer End (D.decode d)
 
-let incomplete_hdr ctx =
+let incomplete_hdr _ctx =
   let d = D.of_string buf3 in
   assert_equal ~printer (Error (Eof buf3)) (D.decode d);
   assert_equal ~printer End (D.decode d)
 
-let incomplete_hdr_ch ctx =
+let incomplete_hdr_ch _ctx =
   let (rd, wr) = Unix.pipe () in
   let nb_written = Unix.write_substring wr buf3 0 3 in
   Unix.close wr;
@@ -145,11 +145,11 @@ let incomplete_hdr_ch ctx =
   assert_equal ~printer End (D.decode d);
   Unix.close rd
 
-let valid_hdr ctx =
+let valid_hdr _ctx =
   let d = D.of_string good_hdr in
   assert_equal ~printer End (D.decode d)
 
-let valid_hdr_ch ctx =
+let valid_hdr_ch _ctx =
   let (rd, wr) = Unix.pipe () in
   let nb_written = Unix.write_substring wr good_hdr 0 H.size in
   Unix.close wr;
@@ -158,12 +158,12 @@ let valid_hdr_ch ctx =
   assert_equal ~printer End (D.decode d);
   Unix.close rd
 
-let invalid_hdr ctx =
+let invalid_hdr _ctx =
   let d = D.of_string bad_hdr in
   assert_equal ~printer (Error (Header_invalid bad_hdr)) (D.decode d);
   assert_equal ~printer End (D.decode d)
 
-let invalid_hdr_ch ctx =
+let invalid_hdr_ch _ctx =
   let rd, wr = Unix.pipe () in
   let nb_written = Unix.write_substring wr bad_hdr 0 H.size in
   Unix.close wr;
@@ -173,12 +173,12 @@ let invalid_hdr_ch ctx =
   assert_equal ~printer End (D.decode d);
   Unix.close rd
 
-let incomplete_r ctx =
+let incomplete_r _ctx =
   let d = D.of_string h_plus_0_5b in
   assert_equal ~printer ~cmp (Error (Eof buf3)) (D.decode d);
   assert_equal ~printer End (D.decode d)
 
-let incomplete_hdr_fd_nb ctx =
+let incomplete_hdr_fd_nb _ctx =
   let (rd, wr) = Unix.pipe () in
   let nb_written = Unix.write_substring wr buf3 0 3 in
   Unix.close wr;
@@ -188,7 +188,7 @@ let incomplete_hdr_fd_nb ctx =
   assert_equal ~printer End (D.decode d);
   Unix.close rd
 
-let invalid_hdr_fd_nb ctx =
+let invalid_hdr_fd_nb _ctx =
   let (rd, wr) = Unix.pipe () in
   let nb_written = Unix.write_substring wr bad_hdr 0 H.size in
   Unix.close wr;
@@ -198,26 +198,26 @@ let invalid_hdr_fd_nb ctx =
   assert_equal ~printer End (D.decode d);
   Unix.close rd
 
-let incomplete_hdr_manual ctx =
+let incomplete_hdr_manual _ctx =
   let d = D.make Manual in
   assert_equal ~printer Await (D.decode d);
   D.Manual.refill_string d buf3 0 3;
   assert_equal ~msg:"first await" ~printer Await (D.decode d);
   assert_equal ~msg:"second await" ~printer Await (D.decode d)
 
-let invalid_hdr_manual ctx =
+let invalid_hdr_manual _ctx =
   let d = D.make Manual in
   D.Manual.refill_string d bad_hdr 0 H.size;
   assert_equal ~msg:"first" ~printer (Error (Header_invalid bad_hdr)) (D.decode d);
   assert_equal ~printer Await (D.decode d)
 
-let incomplete_r_nb ctx =
+let incomplete_r_nb _ctx =
   let d = D.make Manual in
   assert_equal ~msg:"before_feed" ~printer Await (D.decode d);
   D.Manual.refill_string d h_plus_0_5b 0 57;
   assert_equal ~msg:"after_feed" ~printer Await (D.decode d)
 
-let complete_2b_manual ctx =
+let complete_2b_manual _ctx =
   let d = D.make Manual in
   D.Manual.refill_string d h_plus_2b 0 (String.length h_plus_2b);
   let r1 = R.read h_plus_2b 56 in
@@ -226,7 +226,7 @@ let complete_2b_manual ctx =
   assert_equal ~msg:"second" ~printer (R r2) (D.decode d)
 
 
-let decode_3pages ctx =
+let decode_3pages _ctx =
   let i = Bytes.make (3*io_buffer_size) '\000' in
   Bytes.blit_string good_hdr 0 i 0 H.size;
   fill_random_r i H.size;
@@ -253,7 +253,7 @@ let printer = function
 | `Ok -> "Ok"
 | `Partial -> "Partial"
 
-let encode_manual ctx =
+let encode_manual _ctx =
   let len = H.size + R.size in
   let b = Bytes.create 0 in
   let e = E.make Manual in
@@ -279,7 +279,7 @@ let encode_manual ctx =
   assert_equal ~msg:"decoding = encoding" ~cmp:(fun r r' -> R.compare r r' = 0)
     r (R.read_bytes dst H.size)
 
-let decode_smallbuf ctx =
+let decode_smallbuf _ctx =
   let len = H.size + R.size in
   let r = random_r () in
   let r_bytes = Bytes.create len in
@@ -302,7 +302,7 @@ let decode_smallbuf ctx =
     end
   done
 
-let encode_smallbuf ctx =
+let encode_smallbuf _ctx =
   let len = H.size + R.size in
   let r = random_r () in
   let r' = Bytes.create len in
@@ -321,7 +321,7 @@ let encode_smallbuf ctx =
   assert_equal ~msg:"header" good_hdr (Bytes.sub_string r' 0 H.size);
   assert_equal ~cmp:(fun r r' -> R.compare r r' = 0) ~msg:"record" r (R.read_bytes r' H.size)
 
-let decode_recode_2b_manual ctx =
+let decode_recode_2b_manual _ctx =
   let b = Bytes.make (String.length h_plus_2b) '\000' in
   let d = D.make Manual in
   D.Manual.refill_string d h_plus_2b 0 (String.length h_plus_2b);
@@ -338,7 +338,7 @@ let decode_recode_2b_manual ctx =
   assert_equal ~msg:"flush" ~printer `Ok (E.encode e Await);
   assert_equal ~msg:"flush2" ~printer `Ok (E.encode e Await)
 
-let decode_recode_2b_smallbuf ctx =
+let decode_recode_2b_smallbuf _ctx =
   let len = H.size + 2 * R.size in
   let b = Bytes.create 1 in
   let h_plus_2b' = Bytes.create len in
@@ -378,7 +378,7 @@ let decode_recode_2b_smallbuf ctx =
   assert_equal ~msg:"flush" ~printer `Ok (E.encode e Await);
   assert_equal ~msg:"flush2" ~printer `Ok (E.encode e Await)
 
-let decode_encode_3pages ctx =
+let decode_encode_3pages _ctx =
   let src = Bytes.make (3 * io_buffer_size) '\000' in
   let dst = Buffer.create (3 * io_buffer_size) in
   Bytes.blit_string good_hdr 0 src 0 H.size;
@@ -411,7 +411,7 @@ let decode_encode_3pages ctx =
   assert_equal ~printer:(Printf.sprintf "%S")
     Bytes.(sub src 0 (3 * io_buffer_size - 32) |> unsafe_to_string) dst
 
-let decode_encode_3pages_manual ctx =
+let decode_encode_3pages_manual _ctx =
   let src = Bytes.create (3 * io_buffer_size) in
   let dst = Bytes.create io_buffer_size in
   let buf = Buffer.create (3 * io_buffer_size) in
