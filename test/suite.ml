@@ -113,9 +113,9 @@ let decode_recode2 _ctx =
 
 let chk_hdr _ctx =
   let printer = function
-  | Result.Ok () -> "Ok"
-  | Result.Error s -> Printf.sprintf "Error: %s" s in
-  assert_equal ~printer ~msg:"good_hdr" (Result.Ok ()) (H.check good_hdr 0);
+  | Ok () -> "Ok"
+  | Error s -> Printf.sprintf "Error: %s" s in
+  assert_equal ~printer ~msg:"good_hdr" (Ok ()) (H.check good_hdr 0);
   assert_equal ~printer ~msg:"bad_hdr"
     (Error (Printf.sprintf "Char at pos 0 should not be %C" '\000'))
     (H.check bad_hdr 0)

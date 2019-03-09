@@ -28,8 +28,8 @@ module H = struct
     try for i = pos to pos + size - 1 do
         if not @@ char_valid (String.get b i) (i-pos)
         then failwith (Printf.sprintf "Char at pos %d should not be %C" i (String.get b i))
-      done; (Result.Ok ())
-    with Failure s -> (Result.Error s)
+      done; (Ok ())
+    with Failure s -> (Error s)
 
   let write ?(start=0) ?(len=size) b pos =
     if pos + len > Bytes.length b then invalid_arg "bounds";
@@ -67,7 +67,7 @@ module R = struct
   let read buf pos =
     let open EndianString.LittleEndian in
     let get_uint32 = mk_with_buf 8 get_uint32 in
-    let datetime = get_int64 buf pos |> Int64.float_of_bits in
+    let datetime = get_double buf pos in
     let o = get_int32 buf (pos+8) |> Int32.float_of_bits in
     let h = get_int32 buf (pos+12) |> Int32.float_of_bits in
     let l = get_int32 buf (pos+16) |> Int32.float_of_bits in
@@ -174,7 +174,7 @@ module D = struct
     if d.p_pos = 0 && can_read >= H.size then
       let pos = d.pos in d.pos <- d.pos + H.size; d.st <- `R;
       match H.check (Bytes.unsafe_to_string d.buf) pos with
-      | Result.Ok () -> _decode k d
+      | Ok () -> _decode k d
       | Error _ ->
           k d @@ Error (Header_invalid (Bytes.sub_string d.buf pos H.size))
     else
@@ -184,7 +184,7 @@ module D = struct
       d.p_pos <- (d.p_pos + len) mod H.size;
       if d.p_pos = 0 then begin d.st <- `R;
         match H.check (Bytes.unsafe_to_string d.partial) 0 with
-        | Result.Ok () -> _decode k d
+        | Ok () -> _decode k d
         | Error _ ->
             k d @@ Error (Header_invalid Bytes.(sub_string d.partial 0 H.size))
       end

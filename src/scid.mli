@@ -13,7 +13,7 @@ module H : sig
   val size : int
   (** [size] is the size of the SCID header, in bytes. *)
 
-  val check : string -> int -> (unit, string) Result.result
+  val check : string -> int -> (unit, string) result
   (** [check b p] is [Ok ()] if [b] contains a valid header starting at
       [p], and [Error msg] otherwise *)
 
