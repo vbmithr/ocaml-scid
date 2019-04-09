@@ -1,22 +1,19 @@
-opam-version: "1.2"
+opam-version: "2.0"
 name: "scid"
-version: "1.0"
 maintainer: "Vincent Bernardoff <vb@luminar.eu.org>"
 authors: ["Vincent Bernardoff <vb@luminar.eu.org>"]
 homepage: "https://github.com/vbmithr/scid"
 doc: "https://vbmithr.github.io/scid/doc"
 license: "ISC"
-dev-repo: "https://github.com/vbmithr/scid.git"
+dev-repo: "git+https://github.com/vbmithr/scid.git"
 bug-reports: "https://github.com/vbmithr/scid/issues"
 tags: []
-available: [ ocaml-version >= "4.02.0"]
 depends: [
-  "jbuilder" {build & >= "1.0+beta8"}
+  "ocaml" {>= "4.02.0"}
+  "dune" {build & >= "1.0"}
   "ounit" {test}
   "result"
   "ocplib-endian" {>= "1.0"}
 ]
 depopts: []
-build:[ "jbuilder" "build" "-j" jobs "@install" ]
-build-test: [ "jbuilder" "build" "-j" jobs "@runtest" ]
-
+build:[ "dune" "build" "-p" name "-j" jobs ]
