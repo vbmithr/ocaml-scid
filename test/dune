@@ -1,4 +1,4 @@
 (test
  (name suite)
  (modules suite)
- (libraries scid bigarray oUnit))
+ (libraries scid bigarray alcotest))

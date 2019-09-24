@@ -6,7 +6,7 @@
 
 let io_buffer_size = 4096
 
-module ISet = Set.Make(struct type t = int let compare = Pervasives.compare end)
+module ISet = Set.Make(Int)
 
 module H = struct
   let size = 56
@@ -105,6 +105,8 @@ module R = struct
     write r b 0;
     write r' b' 0;
     compare b b'
+
+  let equal r r' = compare r r' = 0
 end
 
 type auto
@@ -257,6 +259,8 @@ module E = struct
     | End
     | R of R.t
 
+  type encode_result = [`Ok | `Partial]
+
   type 'a t = {
     dst: 'a dst;
     partial: Bytes.t;
@@ -265,7 +269,8 @@ module E = struct
     mutable buf : Bytes.t;
     mutable pos : int;
     mutable max : int;
-    mutable k : 'a t -> encode -> [ `Ok | `Partial ] }
+    mutable k : 'a t -> encode -> encode_result
+  }
 
   module Manual = struct
     let add_bytes e buf pos max =
@@ -280,7 +285,7 @@ module E = struct
   | End -> invalid_arg "cannot encode now, use Await first"
 
   let flush :
-    type a. (a t -> [ `Ok | `Partial ]) -> a t -> [ `Ok | `Partial ] =
+    type a. (a t -> encode_result) -> a t -> encode_result =
     fun k e -> match e.dst with
     | Manual -> e.k <- partial k; `Partial
     | Buffer b -> Buffer.add_subbytes b e.buf 0 e.pos; e.pos <- 0; k e

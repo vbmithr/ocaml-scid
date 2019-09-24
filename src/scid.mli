@@ -42,6 +42,8 @@ module R : sig
   (** [compare r r'] is [Pervasives.compare] of their serialized
       representation. *)
 
+  val equal : t -> t -> bool
+
   val size : int
   (** [size] is the size of a (serialized) record, in bytes. *)
 
@@ -150,7 +152,9 @@ module E : sig
     | End
     | R of R.t
 
-  val encode : _ t -> encode -> [ `Ok | `Partial ]
+  type encode_result = [`Ok | `Partial]
+
+  val encode : _ t -> encode -> encode_result
   (** [encode e v] is :
       {ul
       {- [`Partial] iff [e] has a [`Manual] destination and needs
