@@ -1,4 +1,6 @@
 open Scid
+module U = Unix
+open Alcotest
 
 let io_buffer_size = 4096
 let max_uint32 = Int64.(pred (shift_left 1L 32))
@@ -137,27 +139,27 @@ let incomplete_hdr () =
   check decode_result "" D.End D.(decode d)
 
 let incomplete_hdr_ch () =
-  let rd, wr = Unix.pipe () in
-  let nb_written = Unix.write_substring wr buf3 0 3 in
-  Unix.close wr ;
+  let rd, wr = U.pipe () in
+  let nb_written = U.write_substring wr buf3 0 3 in
+  U.close wr ;
   check int "nb_written" 3 nb_written ;
-  let d = D.make @@ Channel (Unix.in_channel_of_descr rd) in
+  let d = D.make @@ Channel (U.in_channel_of_descr rd) in
   check decode_result "" D.(Error (Eof buf3)) D.(decode d) ;
   check decode_result "" D.End D.(decode d) ;
-  Unix.close rd
+  U.close rd
 
 let valid_hdr () =
   let d = D.of_string good_hdr in
   check decode_result "" D.End (D.decode d)
 
 let valid_hdr_ch () =
-  let rd, wr = Unix.pipe () in
-  let nb_written = Unix.write_substring wr good_hdr 0 H.size in
-  Unix.close wr ;
+  let rd, wr = U.pipe () in
+  let nb_written = U.write_substring wr good_hdr 0 H.size in
+  U.close wr ;
   check int "nb_written" H.size nb_written ;
-  let d = D.make @@ Channel (Unix.in_channel_of_descr rd) in
+  let d = D.make @@ Channel (U.in_channel_of_descr rd) in
   check decode_result "" D.End D.(decode d) ;
-  Unix.close rd
+  U.close rd
 
 let invalid_hdr () =
   let d = D.of_string bad_hdr in
@@ -165,14 +167,14 @@ let invalid_hdr () =
   check decode_result "" D.End D.(decode d)
 
 let invalid_hdr_ch () =
-  let rd, wr = Unix.pipe () in
-  let nb_written = Unix.write_substring wr bad_hdr 0 H.size in
-  Unix.close wr ;
+  let rd, wr = U.pipe () in
+  let nb_written = U.write_substring wr bad_hdr 0 H.size in
+  U.close wr ;
   check int "nb_written" H.size nb_written ;
-  let d = D.make @@ Channel (Unix.in_channel_of_descr rd) in
+  let d = D.make @@ Channel (U.in_channel_of_descr rd) in
   check decode_result "" D.(Error (Header_invalid bad_hdr)) D.(decode d) ;
   check decode_result "" D.End D.(decode d) ;
-  Unix.close rd
+  U.close rd
 
 let incomplete_r () =
   let d = D.of_string h_plus_0_5b in
@@ -180,24 +182,24 @@ let incomplete_r () =
   check decode_result "incomp_end" D.End D.(decode d)
 
 let incomplete_hdr_fd_nb () =
-  let rd, wr = Unix.pipe () in
-  let nb_written = Unix.write_substring wr buf3 0 3 in
-  Unix.close wr ;
+  let rd, wr = U.pipe () in
+  let nb_written = U.write_substring wr buf3 0 3 in
+  U.close wr ;
   check int "nb_written" 3 nb_written ;
-  let d = D.make @@ Channel (Unix.in_channel_of_descr rd) in
+  let d = D.make @@ Channel (U.in_channel_of_descr rd) in
   check decode_result "" D.(Error (Eof buf3)) D.(decode d) ;
   check decode_result "" D.End D.(decode d) ;
-  Unix.close rd
+  U.close rd
 
 let invalid_hdr_fd_nb () =
-  let rd, wr = Unix.pipe () in
-  let nb_written = Unix.write_substring wr bad_hdr 0 H.size in
-  Unix.close wr ;
+  let rd, wr = U.pipe () in
+  let nb_written = U.write_substring wr bad_hdr 0 H.size in
+  U.close wr ;
   check int "nb_written" H.size nb_written ;
-  let d = D.make @@ Channel (Unix.in_channel_of_descr rd) in
+  let d = D.make @@ Channel (U.in_channel_of_descr rd) in
   check decode_result "" D.(Error (Header_invalid bad_hdr)) D.(decode d) ;
   check decode_result "" D.End D.(decode d) ;
-  Unix.close rd
+  U.close rd
 
 let incomplete_hdr_manual () =
   let d = D.make Manual in
