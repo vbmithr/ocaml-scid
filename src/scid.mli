@@ -23,18 +23,17 @@ module H : sig
 end
 
 module R : sig
-  type t = {
-    datetime : float;
-    o : float;
-    h : float;
-    l : float;
-    c : float;
-    num_trades : int64;
-    total_volume : int64;
-    bid_volume : int64;
-    ask_volume : int64;
-  }
   (** SierraChart's s_IntradayRecord *)
+  type t =
+    { datetime: float;
+      o: float;
+      h: float;
+      l: float;
+      c: float;
+      num_trades: int64;
+      total_volume: int64;
+      bid_volume: int64;
+      ask_volume: int64 }
 
   val pp : Format.formatter -> t -> unit
 
@@ -59,11 +58,11 @@ module R : sig
   (** [write t ~pos b] writes [t] in [b] at [pos]. *)
 end
 
-type auto
 (** type of auto sources *)
+type auto
 
-type manual
 (** type of manual sources *)
+type manual
 
 (** {1 Decoding} *)
 
@@ -72,18 +71,16 @@ module D : sig
     | Channel : in_channel -> auto src
     | String : string -> auto src
     | Bytes : Bytes.t -> auto src
-    | Manual : manual src
-  (** The type for input sources. *)
+    | Manual : manual src  (** The type for input sources. *)
 
   type error =
     | Header_invalid of string
-    | Eof of string
-    (** The type for errors. *)
+    | Eof of string  (** The type for errors. *)
 
   val pp_error : Format.formatter -> error -> unit
 
-  type 'a t
   (** The type for decoders. *)
+  type 'a t
 
   val make : 'a src -> 'a t
   (** [decoder src] is a decoder that inputs from src. *)
@@ -93,11 +90,7 @@ module D : sig
   val of_bytes : Bytes.t -> auto t
   val manual : unit -> manual t
 
-  type decode_result =
-    | R of R.t
-    | Await
-    | End
-    | Error of error
+  type decode_result = R of R.t | Await | End | Error of error
 
   val decode : _ t -> decode_result
   (** [decode d] is:
@@ -134,11 +127,10 @@ module E : sig
   type _ dst =
     | Channel : out_channel -> auto dst
     | Buffer : Buffer.t -> auto dst
-    | Manual : manual dst
-  (** The type for output destinations. *)
+    | Manual : manual dst  (** The type for output destinations. *)
 
-  type _ t
   (** The type for R encoders. *)
+  type _ t
 
   val make : 'a dst -> 'a t
   (** [make dst] is an encoder that outputs to [dst]. *)
@@ -147,11 +139,7 @@ module E : sig
   val of_buffer : Buffer.t -> auto t
   val manual : unit -> manual t
 
-  type encode =
-    | Await
-    | End
-    | R of R.t
-
+  type encode = Await | End | R of R.t
   type encode_result = [`Ok | `Partial]
 
   val encode : _ t -> encode -> encode_result
